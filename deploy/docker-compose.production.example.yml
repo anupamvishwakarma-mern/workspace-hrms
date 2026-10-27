@@ -1,0 +1,46 @@
+# EXAMPLE production layout. Copy, review every value, and keep real secrets in your platform's secret store
+# (never commit them). MongoDB and Redis are shown for completeness; managed services are preferable.
+#
+#   docker compose -f deploy/docker-compose.production.example.yml --env-file prod.env up -d
+#
+# TLS is terminated by a reverse proxy / load balancer in front of `web` and `api` (not included here).
+# The proxy must set X-Forwarded-For; the API trusts exactly one proxy hop.
+services:
+  api:
+    build: { context: .., dockerfile: deploy/api.Dockerfile }
+    env_file: prod.env
+    restart: unless-stopped
+    depends_on: [mongo]
+    expose: ['4000']
+  worker:
+    build: { context: .., dockerfile: deploy/api.Dockerfile }
+    command: ['node', 'dist/worker.js']
+    env_file: prod.env
+    restart: unless-stopped
+    depends_on: [mongo, redis]
+    deploy: { replicas: 1 } # run exactly one worker; schedules are idempotent but there is no need for more
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        API_ORIGIN: http://api:4000
+        STORAGE_ORIGIN: ${STORAGE_ORIGIN:?set the object-storage origin, e.g. https://s3.example.com}
+    restart: unless-stopped
+    ports: ['3000:3000']
+  mongo:
+    image: mongo:7
+    command:
+      ['--replSet', 'rs0', '--bind_ip_all', '--auth', '--keyFile', '/run/secrets/mongo-keyfile']
+    # Replica set is REQUIRED (transactions). Initiate once: rs.initiate(...). Enable auth, TLS and backups.
+    volumes: ['mongo-data:/data/db']
+    restart: unless-stopped
+  redis:
+    image: redis:7
+    command:
+      ['redis-server', '--appendonly', 'yes', '--requirepass', '${REDIS_PASSWORD:?set a password}']
+    volumes: ['redis-data:/data']
+    restart: unless-stopped
+volumes:
+  mongo-data:
+  redis-data:

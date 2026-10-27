@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Workforce",
+    "slug": "workforce-hrms",
+    "scheme": "workforce",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.workforce",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Your location is read once, only when you check in or out, to confirm you are at your assigned work location.",
+        "NSCameraUsageDescription": "The camera is used only when you check in or out, to take a proof photo for your company."
+      }
+    },
+    "android": {
+      "package": "com.example.workforce",
+      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Your location is read once, only when you check in or out, to confirm you are at your assigned work location.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "The camera is used only when you check in or out, to take a proof photo for your company.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {}
+  }
+}

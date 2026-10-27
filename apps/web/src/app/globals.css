@@ -1,0 +1,186 @@
+@import 'tailwindcss';
+
+:root {
+  --background: #f5f7fa;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --primary: #0f766e;
+  --primary-hover: #115e59;
+  --primary-foreground: #ffffff;
+  --accent: #f0fdfa;
+  --subtle: #f1f5f9;
+  --sidebar: #ffffff;
+  --danger: #be123c;
+  --danger-bg: #fff1f2;
+  --success: #047857;
+  --success-bg: #ecfdf5;
+  --warn: #b45309;
+  --warn-bg: #fffbeb;
+  --info: #0369a1;
+  --info-bg: #f0f9ff;
+  --chart-1: #0d9488;
+  --chart-2: #f59e0b;
+  --chart-3: #f43f5e;
+  --chart-4: #94a3b8;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05);
+  --shadow-lg: 0 24px 48px -12px rgb(15 23 42 / 0.25);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a1014;
+    --foreground: #f1f5f9;
+    --card: #111a20;
+    --muted: #94a3b8;
+    --border: #1f2d36;
+    --primary: #2dd4bf;
+    --primary-hover: #5eead4;
+    --primary-foreground: #042f2e;
+    --accent: #12302f;
+    --subtle: #16222a;
+    --sidebar: #0d151a;
+    --danger: #fb7185;
+    --danger-bg: #3b0f1a;
+    --success: #34d399;
+    --success-bg: #0b2a20;
+    --warn: #fbbf24;
+    --warn-bg: #33230a;
+    --info: #38bdf8;
+    --info-bg: #0c2a3d;
+    --chart-1: #2dd4bf;
+    --chart-2: #fbbf24;
+    --chart-3: #fb7185;
+    --chart-4: #94a3b8;
+    --shadow-sm: none;
+    --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 24px 48px -12px rgb(0 0 0 / 0.6);
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-subtle: var(--subtle);
+  --color-sidebar: var(--sidebar);
+  --shadow-card: var(--shadow-sm);
+  --shadow-pop: var(--shadow-md);
+  --shadow-modal: var(--shadow-lg);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.97);
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.15s ease-out;
+}
+.animate-pop-in {
+  animation: pop-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-rise {
+  animation: rise 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-pop-in,
+  .animate-rise {
+    animation: none;
+  }
+}
+::selection {
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
+}
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+tbody tr:hover td {
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  padding-right: 2.2rem;
+}
+input[type='date'] {
+  min-height: 2.5rem;
+}
+
+/* Printing a letter prints only the open dialog, not the app chrome behind it. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [role='dialog'],
+  [role='dialog'] * {
+    visibility: visible;
+  }
+  [role='dialog'] {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    box-shadow: none;
+    border: 0;
+  }
+  [role='dialog'] button {
+    display: none;
+  }
+}

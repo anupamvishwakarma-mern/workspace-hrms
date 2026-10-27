@@ -1,0 +1,6 @@
+packages:
+  - 'apps/*'
+onlyBuiltDependencies:
+  - argon2
+  - esbuild
+  - mongodb-memory-server
