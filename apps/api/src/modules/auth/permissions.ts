@@ -25,6 +25,8 @@ export type Permission =
   | 'attendance:read:team'
   | 'attendance:events:read' // punch-level detail incl. GPS verification
   | 'attendance:review:all'
+  | 'attendance:manual' // record attendance for someone else directly, with a reason
+  | 'wfh:request' // ask to work from home on given days
   | 'attendance:review:team'
   | 'shift:read'
   | 'shift:manage'
@@ -64,6 +66,7 @@ const COMMON: Permission[] = [
   'letter:read:self',
   'handbook:read',
   'approval:use',
+  'wfh:request',
 ];
 
 const HR_PERMS: Permission[] = [
@@ -84,6 +87,7 @@ const HR_PERMS: Permission[] = [
   'attendance:read:all',
   'attendance:events:read',
   'attendance:review:all',
+  'attendance:manual',
   'shift:manage',
   'location:manage',
   'holiday:manage',

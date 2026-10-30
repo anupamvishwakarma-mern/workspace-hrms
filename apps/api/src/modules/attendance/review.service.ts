@@ -176,6 +176,19 @@ export async function reviewCorrection(
   const corr = await AttendanceCorrection.findOne({ _id: id, tenantId: ctx.tenantId }).lean();
   if (!corr) throw AppError.notFound('Correction not found');
   await assertCanReview(ctx, actorUserId, tenant, corr);
+  return decideCorrection(ctx, actorUserId, tenant, corr, decision, comment, now);
+}
+
+/** Applies a decision to a correction. Callers have already checked who may decide. */
+export async function decideCorrection(
+  ctx: Ctx,
+  actorUserId: Types.ObjectId,
+  tenant: TenantInfo,
+  corr: { _id: Types.ObjectId; employeeId: Types.ObjectId; workDate: string },
+  decision: 'APPROVED' | 'REJECTED',
+  comment: string | undefined,
+  now: Date,
+) {
   return withEmployeeTransaction(ctx.tenantId, corr.employeeId, async (session) => {
     // Atomic PENDING -> decision flip: a second (or concurrent) review finds nothing to update.
     const flipped = await AttendanceCorrection.findOneAndUpdate(
@@ -202,6 +215,46 @@ export async function reviewCorrection(
     await recalculateDay(tenant, corr.employeeId, corr.workDate, now, session);
     return flipped;
   });
+}
+
+/**
+ * HR records someone's attendance directly. It is stored as an already-approved correction (so the
+ * original punches stay untouched and the calculator applies it like any other), marked HR_MANUAL.
+ * Never for your own record, and a reason is always required.
+ */
+export async function recordManualAttendance(
+  ctx: Ctx,
+  actorUserId: Types.ObjectId,
+  input: CorrectionInput & { employeeId: string },
+  now: Date,
+) {
+  if (!hasPermission(ctx.roles, 'attendance:manual')) throw AppError.forbidden();
+  if (ctx.employeeId && String(input.employeeId) === String(ctx.employeeId))
+    throw AppError.forbidden('You cannot record attendance for yourself');
+  const tenant = await loadTenant(ctx.tenantId);
+  const corr = await createCorrection(ctx, actorUserId, input, now);
+  try {
+    await AttendanceCorrection.updateOne(
+      { _id: corr._id, tenantId: ctx.tenantId },
+      { $set: { origin: 'HR_MANUAL' } },
+    );
+    return await decideCorrection(
+      ctx,
+      actorUserId,
+      tenant,
+      corr.toObject(),
+      'APPROVED',
+      'Recorded manually by HR',
+      now,
+    );
+  } catch (e) {
+    // Do not leave a half-made request behind (for example when the times clash with real punches).
+    await AttendanceCorrection.deleteOne({ _id: corr._id, tenantId: ctx.tenantId, status: 'PENDING' });
+    await withEmployeeTransaction(ctx.tenantId, corr.employeeId, (session) =>
+      recalculateDay(tenant, corr.employeeId, corr.workDate, now, session),
+    );
+    throw e;
+  }
 }
 
 /* ------------------------------- exceptions ------------------------------- */

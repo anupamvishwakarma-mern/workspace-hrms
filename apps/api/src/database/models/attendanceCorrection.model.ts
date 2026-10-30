@@ -10,6 +10,8 @@ const attendanceCorrectionSchema = new Schema(
     requestedChanges: { checkIn: { type: Date }, checkOut: { type: Date } },
     reason: { type: String, required: true, maxlength: 1000 },
     status: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: 'PENDING' },
+    /** HR_MANUAL: HR recorded it directly (approved on creation); otherwise the employee asked for it. */
+    origin: { type: String, enum: ['EMPLOYEE_REQUEST', 'HR_MANUAL'], default: 'EMPLOYEE_REQUEST' },
     requestedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     reviewComment: { type: String, maxlength: 1000 },

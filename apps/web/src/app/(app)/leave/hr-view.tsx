@@ -35,6 +35,7 @@ import {
   WINDOW_DAYS,
 } from './data';
 import { CalendarGrid, HolidayList, Legend, MonthNav, StatusBadge } from './parts';
+import { AdjustDialog, LedgerList, LedgerRuns } from './ledger-admin';
 import { LeaveTypes } from './types-admin';
 
 type Tab = 'overview' | 'approvals' | 'calendar' | 'types' | 'balances' | 'reports';
@@ -57,6 +58,8 @@ export function HrView({ switcher }: { switcher: ReactNode }) {
   const [tab, setTab] = useState<Tab>('overview');
   const [month, setMonth] = useState<string>();
   const [empId, setEmpId] = useState('');
+  const [adjusting, setAdjusting] = useState<LeaveBalance>();
+  const year = Number(today.slice(0, 4));
   const [repMonth, setRepMonth] = useState(today.slice(0, 7));
   const m = month ?? today.slice(0, 7);
 
@@ -218,6 +221,8 @@ export function HrView({ switcher }: { switcher: ReactNode }) {
 
       {tab === 'types' && canManage ? <LeaveTypes /> : null}
 
+      {tab === 'balances' && canManage ? <LedgerRuns today={today} /> : null}
+
       {tab === 'balances' ? (
         <Card className="space-y-3 p-4">
           <CardTitle>Employee balances</CardTitle>
@@ -246,25 +251,64 @@ export function HrView({ switcher }: { switcher: ReactNode }) {
               <thead>
                 <tr>
                   <Th>Leave type</Th>
-                  <Th>Per year</Th>
+                  <Th>Entitlement</Th>
                   <Th>Approved</Th>
                   <Th>Pending</Th>
                   <Th>Remaining</Th>
+                  {canManage ? (
+                    <Th>
+                      <span className="sr-only">Actions</span>
+                    </Th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
                 {(balQ.data ?? []).map((b) => (
                   <tr key={b.leaveTypeId}>
                     <Td className="font-medium">{b.name}</Td>
-                    <Td>{b.allowanceDays ?? 'No cap'}</Td>
+                    <Td>
+                      {b.allowanceDays ?? 'No cap'}
+                      {b.entitlement && (b.entitlement.accrued || b.entitlement.carriedForward || b.entitlement.adjustments) ? (
+                        <span className="block text-xs text-muted">
+                          {[
+                            b.entitlement.base ? `${b.entitlement.base} base` : null,
+                            b.entitlement.accrued ? `${b.entitlement.accrued} accrued` : null,
+                            b.entitlement.carriedForward ? `${b.entitlement.carriedForward} carried` : null,
+                            b.entitlement.adjustments ? `${b.entitlement.adjustments > 0 ? '+' : ''}${b.entitlement.adjustments} adjusted` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
+                      ) : null}
+                    </Td>
                     <Td>{b.approvedDays}</Td>
                     <Td>{b.pendingDays}</Td>
                     <Td>{b.remainingDays ?? 'No cap'}</Td>
+                    {canManage ? (
+                      <Td>
+                        <Button size="sm" variant="secondary" onClick={() => setAdjusting(b)}>
+                          Adjust
+                        </Button>
+                      </Td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
             </Table>
           )}
+          {empId && balQ.data ? (
+            <>
+              <h3 className="pt-2 text-sm font-semibold">Credits and adjustments, {year}</h3>
+              <LedgerList
+                employeeId={empId}
+                year={year}
+                typeName={(id) => (balQ.data ?? []).find((b) => b.leaveTypeId === id)?.name ?? 'Leave'}
+              />
+            </>
+          ) : null}
+          {adjusting && empId ? (
+            <AdjustDialog employeeId={empId} balance={adjusting} year={year} onClose={() => setAdjusting(undefined)} />
+          ) : null}
         </Card>
       ) : null}
 

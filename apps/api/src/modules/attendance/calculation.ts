@@ -7,6 +7,8 @@ export type DayStatus =
   'PRESENT' | 'HALF_DAY' | 'ABSENT' | 'ON_LEAVE' | 'HOLIDAY' | 'WEEKLY_OFF' | 'INCOMPLETE';
 
 export interface ShiftPolicy {
+  /** FLEXIBLE shifts have no lateness or early-departure marks. */
+  shiftType?: 'FIXED' | 'FLEXIBLE';
   startTime: string;
   endTime: string;
   graceMinutes: number;
@@ -204,7 +206,7 @@ export function calculateDay(input: CalcInput): CalcResult {
   // --- late / early / overtime ------------------------------------------------------------
   let lateMinutes = 0;
   let earlyDepartureMinutes = 0;
-  if (win && shift && input.leave !== 'HALF') {
+  if (win && shift && shift.shiftType !== 'FLEXIBLE' && input.leave !== 'HALF') {
     if (firstCheckIn) {
       const lateMs = firstCheckIn.getTime() - win.start.getTime();
       if (lateMs > shift.graceMinutes * MIN) lateMinutes = Math.floor(lateMs / MIN);

@@ -5,6 +5,11 @@ const shiftSchema = new Schema(
   {
     tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
     name: { type: String, required: true, trim: true, maxlength: 120 },
+    /**
+     * FIXED: lateness and early departure are measured against start/end.
+     * FLEXIBLE: no lateness or early-departure marks; the day counts by hours worked (minFullDayMinutes is required).
+     */
+    shiftType: { type: String, enum: ['FIXED', 'FLEXIBLE'], default: 'FIXED' },
     startTime: { type: String, required: true }, // 'HH:mm' wall-clock in the shift timezone
     endTime: { type: String, required: true }, // end <= start means the shift ends the next day
     timezone: { type: String }, // defaults to the tenant timezone

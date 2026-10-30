@@ -255,3 +255,18 @@ export async function inboxFilter(actor: Actor): Promise<Record<string, unknown>
     },
   };
 }
+
+/**
+ * Modules whose approvals have no built-in fallback (work from home, ...) call this first. If the
+ * company has no active workflow for the type, a one-step "requester's manager (owner if none)"
+ * workflow is created, which HR can edit later like any other.
+ */
+export async function ensureWorkflow(tenantId: Id, requestType: string, name: string) {
+  const type = requestType.toUpperCase();
+  if (await ApprovalWorkflow.exists({ tenantId, requestType: type, status: 'ACTIVE' })) return;
+  await ApprovalWorkflow.create({ tenantId, requestType: type, name, steps: [{ approverType: 'MANAGER', level: 1 }] }).catch(
+    (e) => {
+      if (!(e && (e as { code?: number }).code === 11000)) throw e; // someone else just created it: fine
+    },
+  );
+}

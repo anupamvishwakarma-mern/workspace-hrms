@@ -12,6 +12,7 @@ import { WorkLocation } from '../../database/models/workLocation.model';
 import type { Env } from '../../config/env';
 import { AppError } from '../../utils/errors';
 import { shiftForDate, type ShiftLean } from '../shifts/shifts.service';
+import { isWfhOn } from './wfhLookup';
 import { calculateDay, type CalcResult, type EventType, type ShiftPolicy } from './calculation';
 import { addDays, localDate, shiftWindow } from './dates';
 import { claimPhoto, verifyPhoto } from './photos';
@@ -103,6 +104,7 @@ export async function loadTenant(
 }
 
 export const toPolicy = (s: ShiftLean): ShiftPolicy => ({
+  shiftType: (s.shiftType as 'FIXED' | 'FLEXIBLE' | undefined) ?? 'FIXED',
   startTime: s.startTime as string,
   endTime: s.endTime as string,
   graceMinutes: (s.graceMinutes as number) ?? 0,
@@ -566,8 +568,15 @@ export async function punch(
 
   // 3. geofence / GPS policy (server decides; client never self-verifies)
   const fences = await loadFences(tenantId, employee.workLocationIds ?? []);
+  // Approved work-from-home days relax an office employee to remote rules (field staff keep theirs).
+  let mode = employee.attendanceMode ?? 'OFFICE';
+  if (mode === 'OFFICE') {
+    const dates = [localDate(now, tenant.timezone)];
+    if (st.workDate && !dates.includes(st.workDate)) dates.push(st.workDate);
+    if (await isWfhOn(tenantId, employeeId, dates)) mode = 'REMOTE';
+  }
   const verdict = evaluateLocation(
-    employee.attendanceMode ?? 'OFFICE',
+    mode,
     tenant.settings.attendance,
     input.location,
     fences,

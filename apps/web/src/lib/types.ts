@@ -198,6 +198,8 @@ export interface LeaveType {
   code: string;
   paid: boolean;
   annualAllowanceDays: number;
+  accrualMode?: 'ANNUAL' | 'MONTHLY';
+  carryForwardMaxDays?: number;
   allowHalfDay: boolean;
   status: string;
 }
@@ -223,7 +225,9 @@ export interface LeaveBalance {
   code: string;
   paid: boolean;
   year: number;
+  accrualMode?: 'ANNUAL' | 'MONTHLY';
   allowanceDays: number | null;
+  entitlement?: { base: number; accrued: number; carriedForward: number; adjustments: number; total: number } | null;
   approvedDays: number;
   pendingDays: number;
   remainingDays: number | null;
@@ -512,4 +516,16 @@ export interface ApprovalWorkflow {
   requestType: string;
   status: 'ACTIVE' | 'INACTIVE';
   steps: ApprovalWorkflowStep[];
+}
+
+export interface LeaveLedgerEntry {
+  id: string;
+  employeeId: string;
+  leaveTypeId: string;
+  year: number;
+  kind: 'ACCRUAL' | 'CARRY_FORWARD' | 'ADJUSTMENT';
+  days: number;
+  period?: string;
+  reason?: string;
+  createdAt: string;
 }

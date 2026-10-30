@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
 import { Alert, Badge, Empty, Table, Td, Th, statusTone } from '@/components/ui/display';
-import { Field, Input } from '@/components/ui/form';
+import { Field, Input, Select } from '@/components/ui/form';
 import { useList, useSave } from '@/hooks/api';
 import { api } from '@/lib/api';
 import { userMessage } from '@/lib/errors';
@@ -22,6 +22,8 @@ const typeSchema = z.object({
   paid: z.boolean(),
   allowHalfDay: z.boolean(),
   annualAllowanceDays: z.coerce.number().min(0).max(366).multipleOf(0.5, 'Use whole or half days'),
+  accrualMode: z.enum(['ANNUAL', 'MONTHLY']),
+  carryForwardMaxDays: z.coerce.number().min(0).max(366).multipleOf(0.5, 'Use whole or half days'),
 });
 type TForm = z.input<typeof typeSchema>;
 
@@ -41,6 +43,8 @@ export function LeaveTypes() {
               <Th>Name</Th>
               <Th>Code</Th>
               <Th>Per year</Th>
+              <Th>Accrual</Th>
+              <Th>Carry over</Th>
               <Th>Paid</Th>
               <Th>Half day</Th>
               <Th>Status</Th>
@@ -57,6 +61,8 @@ export function LeaveTypes() {
                 <Td>
                   {t.annualAllowanceDays === 0 ? 'Unlimited' : `${t.annualAllowanceDays} days`}
                 </Td>
+                <Td>{t.accrualMode === 'MONTHLY' ? 'Monthly' : 'Up front'}</Td>
+                <Td>{t.carryForwardMaxDays ? `Up to ${t.carryForwardMaxDays} days` : 'None'}</Td>
                 <Td>{t.paid ? 'Yes' : 'No'}</Td>
                 <Td>{t.allowHalfDay ? 'Yes' : 'No'}</Td>
                 <Td>
@@ -94,6 +100,8 @@ function TypeForm({ type, onClose }: { type?: LeaveType; onClose: () => void }) 
       paid: type?.paid ?? true,
       allowHalfDay: type?.allowHalfDay ?? true,
       annualAllowanceDays: type?.annualAllowanceDays ?? 0,
+      accrualMode: type?.accrualMode ?? 'ANNUAL',
+      carryForwardMaxDays: type?.carryForwardMaxDays ?? 0,
     },
   });
   const save = useSave(
@@ -141,6 +149,26 @@ function TypeForm({ type, onClose }: { type?: LeaveType; onClose: () => void }) 
               invalid={inv}
               {...f.register('annualAllowanceDays')}
             />
+          )}
+        </Field>
+        <Field
+          label="When is it available?"
+          hint="Up front: the whole allowance from 1 January. Monthly: one month's share is credited each time HR runs monthly accrual, so nothing is available until then."
+        >
+          {(id) => (
+            <Select id={id} {...f.register('accrualMode')}>
+              <option value="ANNUAL">Up front</option>
+              <option value="MONTHLY">Credited monthly</option>
+            </Select>
+          )}
+        </Field>
+        <Field
+          label="Carry over to next year (days)"
+          hint="Most unused days moved into next year by the year-end run. 0 means none."
+          error={e.carryForwardMaxDays?.message}
+        >
+          {(id, inv) => (
+            <Input id={id} type="number" step="0.5" min="0" invalid={inv} {...f.register('carryForwardMaxDays')} />
           )}
         </Field>
         <label className="flex items-center gap-2 text-sm">

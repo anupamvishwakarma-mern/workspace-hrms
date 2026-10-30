@@ -26,6 +26,7 @@ const date = z
 const tz = z.string().refine(isValidTimezone, 'Invalid IANA timezone');
 
 const shiftFields = {
+  shiftType: z.enum(['FIXED', 'FLEXIBLE']),
   name: z.string().trim().min(1).max(120),
   startTime: time,
   endTime: time,
@@ -90,6 +91,7 @@ const rules = (b: Record<string, unknown>, ctx: z.RefinementCtx) => {
 const createBody = z
   .object({ ...shiftFields })
   .partial({
+    shiftType: true,
     timezone: true,
     graceMinutes: true,
     earlyDepartureGraceMinutes: true,
@@ -102,7 +104,15 @@ const createBody = z
     effectiveTo: true,
   })
   .strict()
-  .superRefine(rules);
+  .superRefine(rules)
+  .superRefine((b, ctx) => {
+    if (b.shiftType === 'FLEXIBLE' && b.minFullDayMinutes === undefined)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['minFullDayMinutes'],
+        message: 'A flexible shift needs the hours that make a full day (minFullDayMinutes)',
+      });
+  });
 const patchBody = z
   .object({ ...shiftFields, status: z.enum(['ACTIVE', 'INACTIVE']) })
   .partial()
@@ -135,6 +145,7 @@ const assignList = z.object({ ...paginationQuery, employeeId: objectId.optional(
 const serShift = (s: Record<string, unknown> & { _id: unknown }) => ({
   id: String(s._id),
   name: s.name,
+  shiftType: s.shiftType ?? 'FIXED',
   startTime: s.startTime,
   endTime: s.endTime,
   overnight: String(s.endTime) <= String(s.startTime),
@@ -248,6 +259,8 @@ export function registerShiftRoutes(v1: Router, env: Env): void {
       const merged = { ...before, ...req.body };
       if (merged.startTime === merged.endTime)
         throw AppError.badRequest('Start and end time must differ');
+      if (merged.shiftType === 'FLEXIBLE' && !merged.minFullDayMinutes)
+        throw AppError.unprocessable('A flexible shift needs the hours that make a full day (minFullDayMinutes)');
       const { breakPolicy, overtimePolicy, ...rest } = req.body as Record<
         string,
         Record<string, unknown> | unknown
