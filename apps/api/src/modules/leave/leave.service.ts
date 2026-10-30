@@ -16,6 +16,10 @@ import {
 } from '../attendance/attendance.service';
 import { addDays, dayOfWeek, localDate } from '../attendance/dates';
 import { shiftForDate } from '../shifts/shifts.service';
+import { breakdownFor, isCapped } from './ledger.service';
+import { ApprovalRequest } from '../../database/models/approvalRequest.model';
+import { ApprovalWorkflow } from '../../database/models/approvalWorkflow.model';
+import { decide, registerHooks, submitRequest } from '../approvals/approvals.service';
 
 type Ctx = NonNullable<Request['tenantCtx']>;
 export const MAX_LEAVE_SPAN_DAYS = 60;
@@ -88,17 +92,20 @@ export async function balancesFor(
         usedDays(tenantId, employeeId, t._id, year, ['APPROVED']),
         usedDays(tenantId, employeeId, t._id, year, ['PENDING']),
       ]);
-      const capped = t.annualAllowanceDays > 0;
+      const capped = isCapped(t);
+      const bd = await breakdownFor(tenantId, employeeId, t, year);
       return {
         leaveTypeId: String(t._id),
         name: t.name,
         code: t.code,
         paid: t.paid,
         year,
-        allowanceDays: capped ? t.annualAllowanceDays : null,
+        accrualMode: t.accrualMode ?? 'ANNUAL',
+        allowanceDays: capped ? bd.total : null,
+        entitlement: capped ? bd : null,
         approvedDays: approved,
         pendingDays: pending,
-        remainingDays: capped ? t.annualAllowanceDays - approved - pending : null,
+        remainingDays: capped ? bd.total - approved - pending : null,
       };
     }),
   );
@@ -153,7 +160,7 @@ export async function applyForLeave(
       'The selected dates contain no working days (weekly offs and holidays are free)',
     );
 
-  return withEmployeeTransaction(ctx.tenantId, employeeId, async (session) => {
+  const created = await withEmployeeTransaction(ctx.tenantId, employeeId, async (session) => {
     const clash = await LeaveRequest.exists({
       tenantId: ctx.tenantId,
       employeeId,
@@ -163,14 +170,14 @@ export async function applyForLeave(
     }).session(session);
     if (clash)
       throw AppError.conflict('You already have a pending or approved request for these dates');
-    if (type.annualAllowanceDays > 0) {
-      const used = await usedDays(ctx.tenantId, employeeId, type._id, yearOf(input.startDate), [
-        'PENDING',
-        'APPROVED',
+    if (isCapped(type)) {
+      const [used, bd] = await Promise.all([
+        usedDays(ctx.tenantId, employeeId, type._id, yearOf(input.startDate), ['PENDING', 'APPROVED']),
+        breakdownFor(ctx.tenantId, employeeId, type, yearOf(input.startDate)),
       ]);
-      if (used + days > type.annualAllowanceDays)
+      if (used + days > bd.total)
         throw AppError.unprocessable(
-          `Insufficient ${type.name} balance: ${type.annualAllowanceDays - used} day(s) left, ${days} requested`,
+          `Insufficient ${type.name} balance: ${bd.total - used} day(s) left, ${days} requested`,
         );
     }
     const [doc] = await LeaveRequest.create(
@@ -192,7 +199,82 @@ export async function applyForLeave(
     );
     return doc!;
   });
+  return routeThroughWorkflow(ctx, actorUserId, created, type.name);
 }
+
+/**
+ * When the company has an active LEAVE workflow, its chain decides the request. Otherwise the
+ * built-in rule (manager, or owner when unmanaged) applies unchanged.
+ */
+async function routeThroughWorkflow<T extends { _id: Types.ObjectId; startDate: string; endDate: string; days: number; halfDay?: boolean | null }>(
+  ctx: Ctx,
+  actorUserId: Types.ObjectId,
+  doc: T,
+  typeName: string,
+): Promise<T> {
+  const wf = await ApprovalWorkflow.exists({ tenantId: ctx.tenantId, requestType: 'LEAVE', status: 'ACTIVE' });
+  if (!wf) return doc;
+  try {
+    const ar = await submitRequest(
+      { tenantId: ctx.tenantId, userId: actorUserId, employeeId: ctx.employeeId },
+      {
+        requestType: 'LEAVE',
+        title: `${typeName}: ${doc.startDate} to ${doc.endDate}`,
+        // The reason is deliberately not copied: approvers see it on the leave request itself.
+        details: { leaveType: typeName, startDate: doc.startDate, endDate: doc.endDate, days: doc.days, halfDay: !!doc.halfDay },
+      },
+    );
+    await LeaveRequest.updateOne({ _id: doc._id, tenantId: ctx.tenantId }, { $set: { approvalRequestId: ar._id } });
+    (doc as unknown as { approvalRequestId?: Types.ObjectId }).approvalRequestId = ar._id;
+    return doc;
+  } catch (e) {
+    // No eligible approver (or any failure): do not leave an orphan request nobody can decide.
+    await LeaveRequest.deleteOne({ _id: doc._id, tenantId: ctx.tenantId });
+    throw e;
+  }
+}
+
+/** Applies a finished approval to the leave request it belongs to (the same effects as a direct review). */
+async function applyOutcome(
+  tenantId: Types.ObjectId,
+  approval: { _id: Types.ObjectId; status: string; steps: { comment?: string | null; actedAt?: Date | null }[] },
+  actorUserId: Types.ObjectId,
+  now: Date,
+) {
+  const leave = await LeaveRequest.findOne({ tenantId, approvalRequestId: approval._id }).lean();
+  if (!leave) return;
+  const status = approval.status as 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  const tenant = await loadTenant(tenantId);
+  const comment = [...approval.steps].reverse().find((s) => s.comment)?.comment ?? undefined;
+  await withEmployeeTransaction(tenantId, leave.employeeId, async (session) => {
+    const flipped = await LeaveRequest.findOneAndUpdate(
+      { _id: leave._id, tenantId, status: 'PENDING' },
+      { $set: { status, reviewedBy: actorUserId, reviewedAt: now, reviewComment: comment } },
+      { new: true, session },
+    ).lean();
+    if (flipped && status === 'APPROVED')
+      await recalcRange(tenant, leave.employeeId, leave.startDate, leave.endDate, now, session);
+  });
+}
+
+registerHooks('LEAVE', {
+  async beforeFinalApprove(req) {
+    const leave = await LeaveRequest.findOne({ tenantId: req.tenantId, approvalRequestId: req._id }).lean();
+    if (!leave) return;
+    const type = await LeaveType.findOne({ _id: leave.leaveTypeId, tenantId: req.tenantId }).lean();
+    if (type && isCapped(type)) {
+      const [used, bd] = await Promise.all([
+        usedDays(req.tenantId, leave.employeeId, type._id, yearOf(leave.startDate), ['APPROVED'], leave._id),
+        breakdownFor(req.tenantId, leave.employeeId, type, yearOf(leave.startDate)),
+      ]);
+      if (used + leave.days > bd.total)
+        throw AppError.unprocessable('Approving this would exceed the annual allowance');
+    }
+  },
+  async afterFinal(req, actor) {
+    await applyOutcome(req.tenantId, req as never, actor.userId as Types.ObjectId, actor.now ?? new Date());
+  },
+});
 
 async function recalcRange(
   tenant: TenantInfo,
@@ -227,6 +309,16 @@ export async function reviewLeave(
     String(req.requestedBy) === String(actorUserId);
   if (own && !(tenant.settings.attendance.allowSelfApproval && all))
     throw AppError.forbidden('You cannot review your own request');
+  if (req.approvalRequestId) {
+    // Decided by the approval engine; its hooks apply the outcome to this request.
+    await decide(
+      { tenantId: ctx.tenantId, userId: actorUserId, employeeId: ctx.employeeId, now },
+      req.approvalRequestId,
+      decision === 'APPROVED' ? 'APPROVE' : 'REJECT',
+      comment,
+    );
+    return (await LeaveRequest.findOne({ _id: req._id, tenantId: ctx.tenantId }).lean())!;
+  }
   if (!(await isApproverFor(ctx, req.employeeId))) throw AppError.notFound();
   return withEmployeeTransaction(ctx.tenantId, req.employeeId, async (session) => {
     const flipped = await LeaveRequest.findOneAndUpdate(
@@ -246,16 +338,12 @@ export async function reviewLeave(
       const type = await LeaveType.findOne({ _id: req.leaveTypeId, tenantId: ctx.tenantId })
         .session(session)
         .lean();
-      if (type && type.annualAllowanceDays > 0) {
-        const used = await usedDays(
-          ctx.tenantId,
-          req.employeeId,
-          type._id,
-          yearOf(req.startDate),
-          ['APPROVED'],
-          req._id,
-        );
-        if (used + req.days > type.annualAllowanceDays)
+      if (type && isCapped(type)) {
+        const [used, bd] = await Promise.all([
+          usedDays(ctx.tenantId, req.employeeId, type._id, yearOf(req.startDate), ['APPROVED'], req._id),
+          breakdownFor(ctx.tenantId, req.employeeId, type, yearOf(req.startDate)),
+        ]);
+        if (used + req.days > bd.total)
           throw AppError.unprocessable('Approving this would exceed the annual allowance');
       }
       await recalcRange(tenant, req.employeeId, req.startDate, req.endDate, now, session);
@@ -282,6 +370,11 @@ export async function cancelLeave(ctx: Ctx, actorUserId: Types.ObjectId, id: str
       { new: true, session },
     ).lean();
     if (!flipped) throw AppError.conflict('This request can no longer be cancelled');
+    if (req.approvalRequestId && req.status === 'PENDING')
+      await ApprovalRequest.updateOne(
+        { _id: req.approvalRequestId, tenantId: ctx.tenantId, status: 'PENDING' },
+        { $set: { status: 'CANCELLED', decidedAt: now } },
+      );
     if (req.status === 'APPROVED')
       await recalcRange(tenant, req.employeeId, req.startDate, req.endDate, now, session);
     return { before: req.status, after: flipped };

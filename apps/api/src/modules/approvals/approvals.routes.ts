@@ -63,29 +63,51 @@ const delegationBody = z
   .object({ delegateEmployeeId: objectId, from: z.coerce.date(), to: z.coerce.date() })
   .strict();
 
-const serStep = (s: Record<string, unknown>) => ({
+type Names = Map<string, string>;
+const nm = (names: Names, id: unknown) => (id ? names.get(String(id)) : undefined);
+const serStep = (s: Record<string, any>, names: Names) => ({
   order: s.order,
   approverType: s.approverType,
   role: s.role,
   status: s.status,
   approverEmployeeIds: ((s.approverEmployeeIds as unknown[]) ?? []).map(String),
+  approverNames: ((s.approverEmployeeIds as unknown[]) ?? []).map((i) => nm(names, i) ?? 'Unknown'),
+  actedByName: nm(names, s.actedByEmployeeId),
+  onBehalfOfName: nm(names, s.onBehalfOfEmployeeId),
   actedByEmployeeId: s.actedByEmployeeId ? String(s.actedByEmployeeId) : undefined,
   onBehalfOfEmployeeId: s.onBehalfOfEmployeeId ? String(s.onBehalfOfEmployeeId) : undefined,
   actedAt: s.actedAt,
   comment: s.comment,
 });
-const serRequest = (d: Record<string, any>) => ({
+const serRequest = (d: Record<string, any>, names: Names) => ({
   id: String(d._id),
   requestType: d.requestType,
   title: d.title,
   details: d.details,
   requesterEmployeeId: String(d.requesterEmployeeId),
+  requesterName: nm(names, d.requesterEmployeeId),
   status: d.status,
   currentStep: d.currentStep,
-  steps: (d.steps ?? []).map(serStep),
+  steps: (d.steps ?? []).map((x: Record<string, any>) => serStep(x, names)),
   decidedAt: d.decidedAt,
   createdAt: d.createdAt,
 });
+/** Names for every employee mentioned by these requests (requester, approvers, actors) in one query. */
+async function namesFor(tenantId: unknown, docs: Record<string, any>[]): Promise<Names> {
+  const ids = new Set<string>();
+  for (const d of docs) {
+    ids.add(String(d.requesterEmployeeId));
+    for (const s of d.steps ?? []) {
+      for (const a of s.approverEmployeeIds ?? []) ids.add(String(a));
+      if (s.actedByEmployeeId) ids.add(String(s.actedByEmployeeId));
+      if (s.onBehalfOfEmployeeId) ids.add(String(s.onBehalfOfEmployeeId));
+    }
+  }
+  const rows = await Employee.find({ tenantId: tenantId as never, _id: { $in: [...ids] } })
+    .select('firstName lastName')
+    .lean();
+  return new Map(rows.map((r) => [String(r._id), `${r.firstName} ${r.lastName}`]));
+}
 const serWorkflow = (d: Record<string, any>) => ({
   id: String(d._id),
   name: d.name,
@@ -175,7 +197,7 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
     asyncHandler(async (req, res) => {
       const doc = await submitRequest(actorOf(req), req.body);
       await writeAudit(req, { action: 'approval.submit', entityType: 'ApprovalRequest', entityId: doc._id, after: { requestType: doc.requestType, title: doc.title } });
-      res.status(201).json({ success: true, data: serRequest(doc.toObject()) });
+      res.status(201).json({ success: true, data: serRequest(doc.toObject(), await namesFor(doc.tenantId, [doc.toObject()])) });
     }),
   );
 
@@ -203,7 +225,8 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
         ApprovalRequest.find(filter).sort({ createdAt: -1 }).skip((q.page - 1) * q.limit).limit(q.limit).lean(),
         ApprovalRequest.countDocuments(filter),
       ]);
-      res.json({ success: true, data: items.map(serRequest), meta: { page: q.page, limit: q.limit, total } });
+      const names = await namesFor(actor.tenantId, items);
+      res.json({ success: true, data: items.map((x) => serRequest(x, names)), meta: { page: q.page, limit: q.limit, total } });
     }),
   );
 
@@ -224,7 +247,7 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
         !!actor.employeeId &&
         doc.steps.some((s) => (s.approverEmployeeIds ?? []).some((a) => String(a) === String(actor.employeeId)));
       if (!mine && !manage && !inInbox && !wasApprover) throw AppError.notFound('Request not found');
-      res.json({ success: true, data: serRequest(doc) });
+      res.json({ success: true, data: serRequest(doc, await namesFor(actor.tenantId, [doc])) });
     }),
   );
 
@@ -238,7 +261,7 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
       const { decision, comment } = req.body as z.infer<typeof decisionBody>;
       const doc = await decide(actorOf(req), req.params.id!, decision, comment);
       await writeAudit(req, { action: `approval.${decision.toLowerCase()}`, entityType: 'ApprovalRequest', entityId: doc._id, after: { status: doc.status, step: doc.currentStep } });
-      res.json({ success: true, data: serRequest(doc.toObject()) });
+      res.json({ success: true, data: serRequest(doc.toObject(), await namesFor(doc.tenantId, [doc.toObject()])) });
     }),
   );
 
@@ -251,7 +274,7 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
     asyncHandler(async (req, res) => {
       const doc = await cancelRequest(actorOf(req), req.params.id!);
       await writeAudit(req, { action: 'approval.cancel', entityType: 'ApprovalRequest', entityId: doc._id });
-      res.json({ success: true, data: serRequest(doc.toObject()) });
+      res.json({ success: true, data: serRequest(doc.toObject(), await namesFor(doc.tenantId, [doc.toObject()])) });
     }),
   );
 

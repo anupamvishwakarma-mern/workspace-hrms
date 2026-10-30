@@ -1,3 +1,4 @@
+import { entitlementMap, isCapped } from '../leave/ledger.service';
 import type { Router } from 'express';
 import { DateTime } from 'luxon';
 import type { Types } from 'mongoose';
@@ -124,14 +125,15 @@ export function registerLeaveInsightRoutes(v1: Router, env: Env, deps: { clock: 
         const k = `${r.employeeId}|${r.leaveTypeId}`;
         used.set(k, (used.get(k) ?? 0) + r.days);
       }
-      const capped = types.filter((t) => t.annualAllowanceDays > 0);
+      const capped = types.filter((t) => isCapped(t));
+      const entitled = await entitlementMap(tenant._id, types, year);
       const unused = new Map<string, { all: number; paid: number; negative: boolean }>();
       for (const e of employees) {
         let all = 0;
         let paid = 0;
         let negative = false;
         for (const t of capped) {
-          const left = t.annualAllowanceDays - (used.get(`${e._id}|${t._id}`) ?? 0);
+          const left = entitled(e._id, t._id) - (used.get(`${e._id}|${t._id}`) ?? 0);
           if (left < 0) negative = true;
           all += Math.max(0, left);
           if (t.paid) paid += Math.max(0, left);
@@ -285,6 +287,7 @@ export function registerLeaveInsightRoutes(v1: Router, env: Env, deps: { clock: 
             code: t.code as string,
             paid: !!t.paid,
             annualAllowanceDays: t.annualAllowanceDays as number,
+            accrualMode: (t.accrualMode as string) ?? 'ANNUAL',
             allowHalfDay: !!t.allowHalfDay,
           })),
         },

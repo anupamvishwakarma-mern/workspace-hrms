@@ -475,3 +475,41 @@ export interface LeaveOverview {
     allowHalfDay: boolean;
   }[];
 }
+
+export interface ApprovalStep {
+  order: number;
+  approverType: 'MANAGER' | 'ROLE' | 'EMPLOYEE';
+  role?: string;
+  status: 'WAITING' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'SKIPPED';
+  approverNames: string[];
+  actedByName?: string;
+  onBehalfOfName?: string;
+  actedAt?: string;
+  comment?: string;
+}
+export interface ApprovalRequest {
+  id: string;
+  requestType: string;
+  title: string;
+  details?: Record<string, string | number | boolean | null>;
+  requesterEmployeeId: string;
+  requesterName?: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  currentStep: number;
+  steps: ApprovalStep[];
+  decidedAt?: string;
+  createdAt: string;
+}
+export interface ApprovalWorkflowStep {
+  approverType: 'MANAGER' | 'ROLE' | 'EMPLOYEE';
+  level?: number;
+  role?: string;
+  employeeId?: string;
+}
+export interface ApprovalWorkflow {
+  id: string;
+  name: string;
+  requestType: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  steps: ApprovalWorkflowStep[];
+}

@@ -10,6 +10,7 @@ import { registerHandbookRoutes } from './modules/handbook/handbook.routes';
 import { registerLetterRoutes } from './modules/letters/letters.routes';
 import { registerPayrollRoutes } from './modules/payroll/payroll.routes';
 import { registerTeamRoutes } from './modules/team/team.routes';
+import { registerLeaveLedgerRoutes } from './modules/leave/ledger.routes';
 import { registerLeaveRoutes } from './modules/leave/leave.routes';
 import { registerLocationRoutes } from './modules/locations/locations.routes';
 import { registerReportRoutes } from './modules/reports/reports.routes';
@@ -48,6 +49,7 @@ export function createV1Router(env: Env, deps: { clock: Clock }): Router {
   registerAuditRoutes(v1, env);
   registerDocumentRoutes(v1, env);
   registerNotificationRoutes(v1, env);
+  registerLeaveLedgerRoutes(v1, env, deps); // before leave routes so /leave/ledger is not read as an id
   registerLeaveRoutes(v1, env, deps);
   registerPayrollRoutes(v1, env, deps);
   registerLetterRoutes(v1, env, deps);

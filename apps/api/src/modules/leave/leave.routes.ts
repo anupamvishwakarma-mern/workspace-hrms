@@ -31,9 +31,17 @@ const typeBody = z
     paid: z.boolean(),
     annualAllowanceDays: z.number().min(0).max(366).multipleOf(0.5),
     allowHalfDay: z.boolean(),
+    accrualMode: z.enum(['ANNUAL', 'MONTHLY']),
+    carryForwardMaxDays: z.number().min(0).max(366).multipleOf(0.5),
   })
   .strict();
-const createType = typeBody.partial({ paid: true, annualAllowanceDays: true, allowHalfDay: true });
+const createType = typeBody.partial({
+  paid: true,
+  annualAllowanceDays: true,
+  allowHalfDay: true,
+  accrualMode: true,
+  carryForwardMaxDays: true,
+});
 const patchType = typeBody
   .partial()
   .extend({ status: z.enum(['ACTIVE', 'INACTIVE']).optional() })
@@ -75,6 +83,8 @@ const serType = (t: Record<string, unknown> & { _id: unknown }) => ({
   paid: t.paid,
   annualAllowanceDays: t.annualAllowanceDays,
   allowHalfDay: t.allowHalfDay,
+  accrualMode: t.accrualMode ?? 'ANNUAL',
+  carryForwardMaxDays: t.carryForwardMaxDays ?? 0,
   status: t.status,
 });
 

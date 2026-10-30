@@ -80,10 +80,31 @@ async function delegatorsOf(tenantId: Id, employeeId: Id, now = new Date()): Pro
   return ds.map((d) => d.delegatorEmployeeId);
 }
 
+/**
+ * Modules that own the thing being approved (leave, expenses...) register hooks per request type.
+ * `beforeFinalApprove` may throw to block the last approval; `afterFinal` applies the outcome.
+ */
+export interface RequestHooks {
+  beforeFinalApprove?(req: ApprovalRequestLean): Promise<void>;
+  afterFinal?(req: ApprovalRequestLean, actor: Actor): Promise<void>;
+}
+type ApprovalRequestLean = {
+  _id: Types.ObjectId;
+  tenantId: Types.ObjectId;
+  requestType: string;
+  status: string;
+  currentStep: number;
+  steps: { comment?: string | null }[];
+};
+const hooks = new Map<string, RequestHooks>();
+export const registerHooks = (requestType: string, h: RequestHooks) => void hooks.set(requestType, h);
+
 export interface Actor {
   tenantId: Id;
   userId: Id;
   employeeId?: Id;
+  /** Optional injected time (tests, replays); defaults to the real clock. */
+  now?: Date;
 }
 
 /** Create a request from the ACTIVE workflow for `requestType`; the first step with approvers becomes current. */
@@ -176,6 +197,8 @@ export async function decide(
         ? { ...stepSet, status: 'APPROVED', decidedAt: now }
         : { ...stepSet, currentStep: next, [`steps.${next}.status`]: 'PENDING' };
   }
+  if (decision === 'APPROVE' && !req.steps.some((s, k) => k > i && s.status === 'WAITING'))
+    await hooks.get(req.requestType)?.beforeFinalApprove?.(req as never);
   // Atomic: only the step we read may be decided, and only once.
   const done = await ApprovalRequest.findOneAndUpdate(
     {
@@ -189,6 +212,7 @@ export async function decide(
     { new: true },
   );
   if (!done) throw AppError.conflict('Request changed; reload and try again');
+  if (done.status !== 'PENDING') await hooks.get(done.requestType)?.afterFinal?.(done as never, actor);
   return done;
 }
 
@@ -204,6 +228,7 @@ export async function cancelRequest(actor: Actor, requestId: Id) {
     { new: true },
   );
   if (!done) throw AppError.notFound('Pending request not found');
+  await hooks.get(done.requestType)?.afterFinal?.(done as never, actor);
   return done;
 }
 

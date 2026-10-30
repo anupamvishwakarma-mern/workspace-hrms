@@ -113,6 +113,9 @@ describe('approval requests', () => {
     const id = r.body.data.id;
     const inbox = await api('get', '/approvals?scope=inbox', 'manager');
     expect(inbox.body.data.map((x: { id: string }) => x.id)).toContain(id);
+    const item = inbox.body.data.find((x: { id: string }) => x.id === id);
+    expect(item.requesterName).toBeTruthy();
+    expect(item.steps[0].approverNames.length).toBeGreaterThan(0);
     const other = await api('get', '/approvals?scope=inbox', 'employee2');
     expect(other.body.data.map((x: { id: string }) => x.id)).not.toContain(id);
     expect((await api('get', `/approvals/${id}`, 'employee2')).status).toBe(404);

@@ -20,6 +20,8 @@ const leaveRequestSchema = new Schema(
     status: { type: String, enum: LEAVE_STATUSES, default: 'PENDING' },
     reviewedBy: { type: Schema.Types.ObjectId },
     reviewedAt: { type: Date },
+    /** Set when the company has an active LEAVE approval workflow: that request decides this one. */
+    approvalRequestId: { type: Schema.Types.ObjectId },
     reviewComment: { type: String, maxlength: 1000 },
   },
   { timestamps: true },
