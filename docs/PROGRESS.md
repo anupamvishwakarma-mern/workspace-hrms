@@ -36,6 +36,8 @@ Last updated: 2026-10-30. Plan and gap analysis: [HRMS_AUDIT.md](HRMS_AUDIT.md).
   - **Not built:** income tax (TDS) calculation. Record it as a manual deduction adjustment. No claim of legal compliance: rule figures must be checked by a qualified professional.
   - Tests: `statutory-calc.test.ts` (11, pass in cloud), `payroll-statutory.test.ts` (7, **not yet run**; all figures are made-up examples).
   - **Still to do in Phase 5:** maker-checker publishing, payslip PDF, web screens (rules, adjustments, employer lines), F&F groundwork (Phase 8).
+- **Phase 5, increment 2 (maker-checker publishing; API only):** new permission `payroll:publish` (HR/owner and payroll admin, so nothing changes by default). New company setting `settings.payroll.requireSeparatePublisher` (default off; owner changes it via `PATCH /tenants/current`). When on, whoever last generated a run cannot publish it (403 `SEPARATE_PUBLISHER_REQUIRED`); someone else with the permission must. Only the generator is checked, not who edited rules or adjustments. Tests: `payroll-maker-checker.test.ts` (3, **not yet run**). Phase 5 API suite last run: 381 passed, 2 skipped (before this increment).
+- **Phase 5, increment 3 (payslip PDF; API only):** `GET /payroll/payslips/:id/pdf` with the same access rules as the JSON payslip (employee: own and published only; payroll managers: any, audited). Shows earnings, deductions, net pay and employer contributions; drafts are watermarked "DRAFT" in the header text. **New dependency `pdfkit` (+ `@types/pdfkit`): run `pnpm install` after pulling.** Limits: built-in fonts, so text outside Latin-1 (e.g. Hindi names) prints as "?"; embedding a Unicode font is a later task. Money formatting is plain (`INR 12,345.00`), no rupee symbol. Tests: `payslip-pdf.test.ts` (3, pass in cloud) and one extra PDF check inside `payroll-statutory.test.ts` (**not yet run**).
 
 ## Verification status
 
@@ -71,7 +73,7 @@ Phase 2 remainder
 
 Phase 3: approval engine first (workflows, requests, actions, self-approval and cycle prevention, escalation, delegation), then recruitment and onboarding.
 Phase 4: leave policies/accrual/ledger/multi-level approval, shift types, WFH, manual attendance.
-Phase 5: [x] statutory rules and adjustments (API); [ ] maker-checker payroll; [ ] payslip PDF; [ ] web screens; [ ] F&F groundwork.
+Phase 5: [x] statutory rules and adjustments (API); [x] maker-checker payroll (API); [x] payslip PDF (API); [ ] web screens; [ ] F&F groundwork.
 Phase 6-10: as in the audit.
 
 ## Honest limits

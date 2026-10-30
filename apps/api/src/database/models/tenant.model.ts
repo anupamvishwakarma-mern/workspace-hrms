@@ -29,6 +29,10 @@ const tenantSchema = new Schema(
         requirePhoto: { type: Boolean, default: false },
         maxOpenSessionHours: { type: Number, default: 16 },
       },
+      payroll: {
+        /** When true, whoever last generated a run cannot publish it. Off by default. */
+        requireSeparatePublisher: { type: Boolean, default: false },
+      },
     },
     branding: {
       logoUrl: { type: String },

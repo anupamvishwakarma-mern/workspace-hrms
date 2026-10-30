@@ -290,10 +290,17 @@ export async function publishRun(
   runId: string,
   actorId: Types.ObjectId,
   now: Date,
+  opts: { requireSeparatePublisher?: boolean } = {},
 ) {
   const run = await PayrollRun.findOne({ _id: runId, tenantId });
   if (!run) throw AppError.notFound('Payroll run not found');
   if (run.status === 'PUBLISHED') throw AppError.conflict('This run is already published');
+  if (opts.requireSeparatePublisher && String(run.generatedBy) === String(actorId))
+    throw new AppError(
+      403,
+      'SEPARATE_PUBLISHER_REQUIRED',
+      'This company requires a different person to publish payroll. The person who generated this run cannot publish it.',
+    );
   const negative = await Payslip.countDocuments({
     tenantId,
     runId: run._id,

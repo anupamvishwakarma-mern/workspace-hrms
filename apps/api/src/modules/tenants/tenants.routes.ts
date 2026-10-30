@@ -40,6 +40,7 @@ const patchBody = z
           })
           .partial()
           .strict(),
+        payroll: z.object({ requireSeparatePublisher: z.boolean() }).partial().strict(),
       })
       .partial()
       .strict(),

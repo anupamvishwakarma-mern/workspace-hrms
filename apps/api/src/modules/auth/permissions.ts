@@ -49,6 +49,7 @@ export type Permission =
   | 'document:manage' // upload/read/delete any employee's documents
   | 'payroll:read:self' // own salary structure and published payslips
   | 'payroll:manage' // salary structures, payroll runs, any payslip
+  | 'payroll:publish' // publish a generated run (can be required to be a different person)
   | 'letter:read:self' // letters issued to me
   | 'letter:manage' // templates and issuing letters
   | 'handbook:read' // published handbook sections
@@ -101,6 +102,7 @@ const HR_PERMS: Permission[] = [
   'leave:manage',
   'document:manage',
   'payroll:manage',
+  'payroll:publish',
   'letter:manage',
   'handbook:manage',
   'approval:manage',
@@ -140,6 +142,7 @@ export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
     'designation:read',
     ...COMMON,
     'payroll:manage',
+    'payroll:publish',
     'attendance:read:all', // summaries only: no punch-level GPS detail
     'leave:read:all', // dates and type only; reasons are hidden from this role
   ],

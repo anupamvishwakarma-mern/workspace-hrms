@@ -185,6 +185,15 @@ describe('payroll run with rules and adjustments', () => {
     const mine = await call('get', 'employee', '/payroll/my/payslips');
     const full = await call('get', 'employee', `/payroll/payslips/${mine.body.data[0].id}`);
     expect(lineOf(full.body.data, 'STAT_EMP_PCT')!.amountMinor).toBe(250_000);
+    const pdf = await call('get', 'employee', `/payroll/payslips/${mine.body.data[0].id}/pdf`).buffer(true).parse((res, cb) => {
+      const c: Buffer[] = [];
+      res.on('data', (d: Buffer) => c.push(d));
+      res.on('end', () => cb(null, Buffer.concat(c)));
+    });
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    expect((pdf.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    expect((await call('get', 'manager', `/payroll/payslips/${mine.body.data[0].id}/pdf`)).status).toBe(404);
     expect(full.body.data.employerLines).toHaveLength(1);
   });
 });

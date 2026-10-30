@@ -4,6 +4,7 @@ import type { Env } from '../../config/env';
 import { Employee } from '../../database/models/employee.model';
 import { PayrollRun, Payslip } from '../../database/models/payroll.model';
 import { SalaryStructure } from '../../database/models/salaryStructure.model';
+import { Tenant } from '../../database/models/tenant.model';
 import { authenticate, requirePermission, resolveTenant } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
 import type { Clock } from '../../utils/clock';
@@ -14,6 +15,7 @@ import { writeAudit } from '../audit/audit.service';
 import { WORK_DATE_RE, isRealDate, localDate } from '../attendance/dates';
 import { loadTenant } from '../attendance/attendance.service';
 import { hasPermission } from '../auth/permissions';
+import { renderPayslipPdf } from './payslipPdf';
 import { validateStructure, type PayComponent } from './calc';
 import {
   MONTH_RE,
@@ -324,17 +326,21 @@ export function registerPayrollRoutes(v1: Router, env: Env, deps: { clock: Clock
         'Publish a run: payslips become visible to employees and can no longer be changed. Refused while any net pay is negative.',
       tags: ['Payroll'],
       auth: 'tenant',
-      permission: 'payroll:manage',
+      permission: 'payroll:publish',
     },
     ...chain,
-    requirePermission('payroll:manage'),
+    requirePermission('payroll:publish'),
     validate({ params: idParams }),
     asyncHandler(async (req, res) => {
+      const tenant = await Tenant.findById(req.tenantCtx!.tenantId)
+        .select('settings.payroll')
+        .lean();
       const run = await publishRun(
         req.tenantCtx!.tenantId,
         String(req.params.id),
         req.auth!.userId,
         deps.clock.now(),
+        { requireSeparatePublisher: !!tenant?.settings?.payroll?.requireSeparatePublisher },
       );
       await writeAudit(req as Request, {
         action: 'payroll.run_published',
@@ -412,5 +418,58 @@ export function registerPayrollRoutes(v1: Router, env: Env, deps: { clock: Clock
       res.json({ success: true, data: serPayslip(p) });
     }),
   );
+  route(
+    v1,
+    {
+      method: 'get',
+      path: '/payroll/payslips/:id/pdf',
+      summary:
+        'Payslip as a PDF. Same access rules as the JSON payslip. Latin text only (names in other scripts show as "?").',
+      tags: ['Payroll'],
+      auth: 'tenant',
+      permission: 'payroll:read:self',
+    },
+    ...chain,
+    requirePermission('payroll:read:self'),
+    validate({ params: idParams }),
+    asyncHandler(async (req, res) => {
+      const ctx = req.tenantCtx!;
+      const p = await Payslip.findOne({ _id: req.params.id, tenantId: ctx.tenantId }).lean();
+      const own = !!p && !!ctx.employeeId && String(p.employeeId) === String(ctx.employeeId);
+      const manager = hasPermission(ctx.roles, 'payroll:manage');
+      if (!p || !((own && p.status === 'PUBLISHED') || manager))
+        throw AppError.notFound('Payslip not found');
+      if (!own)
+        await writeAudit(req as Request, {
+          action: 'payroll.payslip_viewed',
+          entityType: 'Payslip',
+          entityId: p._id,
+          after: { employeeId: p.employeeId, month: p.month, format: 'pdf' },
+        });
+      const tenant = await Tenant.findById(ctx.tenantId).select('name').lean();
+      const pdf = await renderPayslipPdf({
+        companyName: tenant?.name ?? '',
+        month: p.month,
+        currency: p.currency,
+        employee: p.employee ?? {},
+        attendance: p.attendance,
+        lines: p.lines ?? [],
+        grossMinor: p.grossMinor,
+        deductionsMinor: p.deductionsMinor,
+        netMinor: p.netMinor,
+        employerLines: p.employerLines ?? [],
+        draft: p.status !== 'PUBLISHED',
+      });
+      res
+        .status(200)
+        .set({
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="payslip-${p.month}.pdf"`,
+          'Cache-Control': 'private, no-store',
+        })
+        .send(pdf);
+    }),
+  );
+
   void monthBounds;
 }
