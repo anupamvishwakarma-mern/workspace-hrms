@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import type { Types } from 'mongoose';
 import { DateTime } from 'luxon';
+import { isApproverFor } from '../attendance/review.service';
 import { Employee } from '../../database/models/employee.model';
 import { LeaveRequest } from '../../database/models/leaveRequest.model';
 import { LeaveType } from '../../database/models/leaveType.model';
@@ -226,13 +227,7 @@ export async function reviewLeave(
     String(req.requestedBy) === String(actorUserId);
   if (own && !(tenant.settings.attendance.allowSelfApproval && all))
     throw AppError.forbidden('You cannot review your own request');
-  if (!all) {
-    const emp = await Employee.findOne({ _id: req.employeeId, tenantId: ctx.tenantId })
-      .select('managerId')
-      .lean();
-    if (!emp || !ctx.employeeId || String(emp.managerId) !== String(ctx.employeeId))
-      throw AppError.notFound();
-  }
+  if (!(await isApproverFor(ctx, req.employeeId))) throw AppError.notFound();
   return withEmployeeTransaction(ctx.tenantId, req.employeeId, async (session) => {
     const flipped = await LeaveRequest.findOneAndUpdate(
       { _id: req._id, tenantId: ctx.tenantId, status: 'PENDING' },

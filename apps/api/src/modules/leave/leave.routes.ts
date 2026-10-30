@@ -13,7 +13,7 @@ import { route } from '../../utils/route';
 import { idParams, objectId, paginationQuery, validate } from '../../utils/validate';
 import { WORK_DATE_RE, isRealDate, localDate } from '../attendance/dates';
 import { loadTenant } from '../attendance/attendance.service';
-import { teamScope } from '../attendance/review.service';
+import { approvalScope, teamScope } from '../attendance/review.service';
 import { writeAudit } from '../audit/audit.service';
 import { notifyEmployee } from '../notifications/push.service';
 import { hasPermission } from '../auth/permissions';
@@ -313,21 +313,15 @@ export function registerLeaveRoutes(v1: Router, env: Env, deps: { clock: Clock }
         if (!ctx.employeeId) throw AppError.forbidden('Your account has no employee record');
         filter.employeeId = ctx.employeeId;
       } else {
-        const all =
+        const reviewer =
           hasPermission(ctx.roles, 'leave:review:all') ||
-          hasPermission(ctx.roles, 'leave:read:all');
-        const team =
-          hasPermission(ctx.roles, 'leave:review:team') ||
-          hasPermission(ctx.roles, 'leave:read:team');
-        if (!all && !team) throw AppError.forbidden();
+          hasPermission(ctx.roles, 'leave:review:team');
+        const all = !reviewer && hasPermission(ctx.roles, 'leave:read:all');
+        if (!reviewer && !all) throw AppError.forbidden();
         // Payroll may read dates/types company-wide but not the private reason text.
-        seeAllReasons = hasPermission(ctx.roles, 'leave:review:all') || (!all && team);
-        if (!all) {
-          const reports = await Employee.find({ tenantId: ctx.tenantId, managerId: ctx.employeeId })
-            .select('_id')
-            .lean();
-          filter.employeeId = { $in: reports.map((r) => r._id) };
-        }
+        seeAllReasons = reviewer;
+        // Reviewers see the requests they decide: their reports, plus unmanaged people for the owner.
+        if (!all) filter.employeeId = { $in: await approvalScope(ctx) };
         if (q.employeeId) {
           const allowed = filter.employeeId as { $in: unknown[] } | undefined;
           if (allowed && !allowed.$in.some((i) => String(i) === q.employeeId))

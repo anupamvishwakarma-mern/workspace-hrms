@@ -216,7 +216,8 @@ describe('dashboard', () => {
     expect(hr.trend.at(-1).date).toBe(THU);
     expect(hr.today.notYetIn).toBeGreaterThan(0); // Thursday, nobody has checked in
     expect(hr.today.unscheduled).toBe(1);
-    expect(hr.pending).toEqual({ corrections: 1, exceptions: 0 });
+    // HR no longer decides others' requests, so nothing is waiting on them; the employee's manager has it.
+    expect(hr.pending).toEqual({ corrections: 0, exceptions: 0 });
     const monday = hr.trend.find((d: { date: string }) => d.date === MON);
     expect(monday.present).toBe(1);
     const mgr = (await get('manager', '/reports/dashboard')).body.data;
@@ -233,7 +234,10 @@ describe('dashboard', () => {
       reason: 'Forgot to check in',
     });
     expect((await get('manager', '/reports/dashboard')).body.data.pending.corrections).toBe(1);
-    expect((await get('hr', '/reports/dashboard')).body.data.pending.corrections).toBe(2);
+    // the manager has no manager, so their own request waits on the owner
+    expect(
+      (await get('owner', '/reports/dashboard')).body.data.pending.corrections,
+    ).toBeGreaterThanOrEqual(1);
   });
 });
 

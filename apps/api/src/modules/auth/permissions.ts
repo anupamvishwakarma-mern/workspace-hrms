@@ -15,6 +15,8 @@ export type Permission =
   | 'employee:roles'
   | 'department:read'
   | 'department:manage'
+  | 'designation:read'
+  | 'designation:manage'
   | 'attendance:punch'
   | 'attendance:read:self'
   | 'attendance:read:all' // daily summaries (no GPS/event detail)
@@ -70,6 +72,8 @@ const HR_PERMS: Permission[] = [
   'employee:roles',
   'department:read',
   'department:manage',
+  'designation:read',
+  'designation:manage',
   ...COMMON,
   'attendance:read:all',
   'attendance:events:read',
@@ -97,6 +101,7 @@ export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
     'employee:read:self',
     'employee:update:self',
     'department:read',
+    'designation:read',
     ...COMMON,
     'attendance:read:team',
     'attendance:events:read',
@@ -109,6 +114,7 @@ export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
     'employee:read:self',
     'employee:update:self',
     'department:read',
+    'designation:read',
     ...COMMON,
   ],
   PAYROLL_ADMIN: [
@@ -117,6 +123,7 @@ export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
     'employee:read:self',
     'employee:update:self',
     'department:read',
+    'designation:read',
     ...COMMON,
     'payroll:manage',
     'attendance:read:all', // summaries only: no punch-level GPS detail

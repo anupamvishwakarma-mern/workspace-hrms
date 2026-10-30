@@ -325,3 +325,171 @@ export const employeeSelf = z.object({
     .nullish(),
 });
 export type EmployeeSelf = z.infer<typeof employeeSelf>;
+
+/* ---- role dashboards (owner / HR / manager) ---- */
+const rate = z.number().nullable();
+const metrics = z.object({
+  attendanceRate: rate,
+  absenteeism: rate,
+  lateRate: rate,
+  avgNetMinutes: rate,
+  overtimeMinutes: z.number(),
+});
+export const attendanceOverview = z.object({
+  month: z.string(),
+  headcount: z.number(),
+  basis: z.string(),
+  live: z.object({
+    headcount: z.number(),
+    present: z.number(),
+    onLeave: z.number(),
+    absent: z.number(),
+    notIn: z.number(),
+    off: z.number(),
+    expected: z.number(),
+    rate,
+    lateToday: z.number(),
+    byDepartment: z.array(
+      z.object({
+        name: z.string(),
+        headcount: z.number(),
+        present: z.number(),
+        onLeave: z.number(),
+        absent: z.number(),
+        notIn: z.number(),
+      }),
+    ),
+  }),
+  current: metrics,
+  previous: metrics,
+  trend: z.array(z.object({ month: z.string(), attendanceRate: rate })),
+  weekday: z.array(z.object({ day: z.string(), absenteeism: rate })),
+  byDepartment: z.array(
+    z.object({ name: z.string(), headcount: z.number(), attendanceRate: rate }),
+  ),
+  byLocation: z.array(z.object({ name: z.string(), headcount: z.number(), attendanceRate: rate })),
+  attention: z.object({
+    lateMarkLimit: z.object({ limit: z.number(), count: z.number() }),
+    absentStreak: z.object({ days: z.number(), count: z.number() }),
+    highOvertime: z.object({ hours: z.number(), count: z.number() }),
+    overdueApprovals: z.object({ days: z.number(), count: z.number() }),
+    teamsBelowFloor: z.object({ floor: z.number(), names: z.array(z.string()) }),
+  }),
+  compliance: z.object({
+    previousMonthPayroll: z.string().nullable(),
+    currentMonthPayroll: z.string().nullable(),
+    openLocationExceptions: z.number(),
+    manualEditsApproved: z.number(),
+  }),
+});
+export type AttendanceOverview = z.infer<typeof attendanceOverview>;
+
+export const leaveOverview = z.object({
+  month: z.string(),
+  headcount: z.number(),
+  onLeaveToday: z.object({ people: z.number(), headcount: z.number() }),
+  next7: z.array(z.object({ date: z.string(), people: z.number() })),
+  current: z.object({ days: z.number(), unplannedShare: rate }),
+  previous: z.object({ days: z.number(), unplannedShare: rate }),
+  daysPerPerson6m: z.number(),
+  totalDays6m: z.number(),
+  trend: z.array(z.object({ month: z.string(), days: z.number() })),
+  byType: z.array(z.object({ name: z.string(), days: z.number(), share: z.number() })),
+  plannedShare: rate,
+  unplannedShare6m: rate,
+  coverage: z.array(
+    z.object({
+      department: z.string(),
+      weekStart: z.string(),
+      off: z.number(),
+      headcount: z.number(),
+      pct: z.number(),
+    }),
+  ),
+  liability: z.object({
+    unusedDays: z.number(),
+    paidUnusedDays: z.number(),
+    avgUnusedPerPerson: z.number(),
+  }),
+  attention: z.object({
+    highUnused: z.object({ days: z.number(), count: z.number() }),
+    noLeave: z.object({ months: z.number(), count: z.number() }),
+    pastWindow: z.object({ days: z.number(), count: z.number() }),
+    negativeBalances: z.number(),
+    crowdedTeams: z.object({ pct: z.number(), names: z.array(z.string()) }),
+  }),
+  policy: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      paid: z.boolean(),
+      annualAllowanceDays: z.number(),
+    }),
+  ),
+});
+export type LeaveOverview = z.infer<typeof leaveOverview>;
+
+export const dashboardData = z.object({
+  workDate: z.string(),
+  timezone: z.string(),
+  scope: z.enum(['ALL', 'TEAM']),
+  headcount: z.number(),
+  trend: z.array(
+    z.object({
+      date: z.string(),
+      present: z.number(),
+      halfDay: z.number(),
+      absent: z.number(),
+      late: z.number(),
+    }),
+  ),
+  pending: z.object({ corrections: z.number(), exceptions: z.number() }).nullable(),
+});
+export type DashboardData = z.infer<typeof dashboardData>;
+
+/** A leave request as a reviewer sees it (with the person it belongs to). */
+export const reviewLeave = z.object({
+  id: z.string(),
+  employeeId: z.string(),
+  employee: z
+    .object({ firstName: z.string(), lastName: z.string(), employeeCode: z.string() })
+    .optional(),
+  leaveType: z.object({ name: z.string(), code: z.string() }).optional(),
+  startDate: z.string(),
+  endDate: z.string(),
+  halfDay: z.boolean().default(false),
+  days: z.number(),
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']),
+  reason: optStr,
+  reviewComment: optStr,
+  createdAt: z.string(),
+});
+export type ReviewLeave = z.infer<typeof reviewLeave>;
+
+export const reviewCorrection = z.object({
+  id: z.string(),
+  employeeId: z.string(),
+  employee: z
+    .object({ firstName: z.string(), lastName: z.string(), employeeCode: z.string() })
+    .optional(),
+  workDate: z.string(),
+  reason: z.string(),
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  requestedChanges: z.object({ checkIn: optStr, checkOut: optStr }).optional(),
+  createdAt: z.string().optional(),
+});
+export type ReviewCorrection = z.infer<typeof reviewCorrection>;
+
+export const staffRow = z.object({
+  id: z.string(),
+  employeeCode: z.string(),
+  firstName: z.string(),
+  lastName: z.string(),
+  departmentId: z.string().optional(),
+  designation: z.string().optional(),
+  employmentStatus: z.string(),
+  joiningDate: z.string().optional(),
+  lastWorkingDate: z.string().optional(),
+});
+export type StaffRow = z.infer<typeof staffRow>;
+export const departmentRow = z.object({ id: z.string(), name: z.string() });

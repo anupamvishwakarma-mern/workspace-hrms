@@ -1,6 +1,8 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { Alert, Avatar, Badge, Empty, PageHeader, Skeleton, TabBar } from '@/components/ui/display';
+import { PageTop } from '@/components/page-top';
+import { Alert, Avatar, Badge, Empty, Skeleton, TabBar } from '@/components/ui/display';
+import { DonutChart, Panel } from '../dashboard/charts';
 import { Input } from '@/components/ui/form';
 import { useOne } from '@/hooks/api';
 import { userMessage } from '@/lib/errors';
@@ -33,7 +35,47 @@ export default function TeamPage() {
   }, [data, filter, search]);
   return (
     <>
-      <PageHeader title={t('team.title')} description={t('team.desc')} />
+      <PageTop
+        title={t('team.title')}
+        description={t('team.desc')}
+        scope="your team today"
+        stats={
+          data
+            ? [
+                { label: 'People', value: data.members.length },
+                {
+                  label: 'At work',
+                  value: (data.counts.WORKING ?? 0) + (data.counts.ON_BREAK ?? 0),
+                  tone: 'success',
+                },
+                { label: 'On leave', value: data.counts.ON_LEAVE ?? 0 },
+                {
+                  label: 'Not in yet',
+                  value: data.counts.NOT_IN ?? 0,
+                  tone: (data.counts.NOT_IN ?? 0) > 0 ? 'warn' : 'neutral',
+                },
+              ]
+            : undefined
+        }
+        guide={[
+          'Shows who is working, on a break, checked out, on leave or not in yet, right now.',
+          'Managers see their direct reports. HR and owners see everyone.',
+          'Only status is shown here. Locations, photos and punch times stay private.',
+        ]}
+      />
+      {data ? (
+        <Panel title="Team status today" className="mb-5">
+          <DonutChart
+            center={data.members.length}
+            centerSub="people"
+            data={ORDER.map((s) => ({
+              name: t(`team.${s}` as Key),
+              value: data.counts[s] ?? 0,
+            })).filter((x) => x.value > 0)}
+            empty="No team members to show."
+          />
+        </Panel>
+      ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!data ? (
         q.isError ? null : (

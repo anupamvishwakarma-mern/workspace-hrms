@@ -210,7 +210,8 @@ describe('review', () => {
         .status,
     ).toBe(403);
     expect(
-      (await call('post', 'hr', `/leave/requests/${mgrOwn.body.data.id}/approve`).send({})).status,
+      (await call('post', 'owner', `/leave/requests/${mgrOwn.body.data.id}/approve`).send({}))
+        .status,
     ).toBe(200);
     // HR cannot approve their own either (separation of duties is the default)
     const hrOwn = await apply('hr', {
@@ -235,8 +236,11 @@ describe('review', () => {
       (await call('post', 'manager', `/leave/requests/${reqId}/approve`).send({})).status,
     ).toBe(409);
     expect(
-      (await call('post', 'hr', `/leave/requests/${reqId}/reject`).send({ comment: 'too late' }))
-        .status,
+      (
+        await call('post', 'manager', `/leave/requests/${reqId}/reject`).send({
+          comment: 'too late',
+        })
+      ).status,
     ).toBe(409);
     expect(await AuditLog.countDocuments({ entityId: reqId, action: 'leave.approved' })).toBe(1);
     const bal = await call('get', 'employee', '/leave/balances?year=2026');
@@ -259,7 +263,7 @@ describe('review', () => {
     ).toBe(3);
     expect(
       (
-        await call('post', 'hr', `/leave/requests/${r.body.data.id}/reject`).send({
+        await call('post', 'owner', `/leave/requests/${r.body.data.id}/reject`).send({
           comment: 'Busy period',
         })
       ).status,
@@ -280,11 +284,16 @@ describe('visibility', () => {
     const team = await call('get', 'manager', '/leave/requests?scope=review');
     for (const r of team.body.data) expect(r.employeeId).toBe(String(t.people.employee.employeeId));
     expect(team.body.data.length).toBeGreaterThan(0);
-    const hr = await call('get', 'hr', '/leave/requests?scope=review&limit=100');
-    expect(hr.body.data.length).toBeGreaterThan(team.body.data.length);
-    expect(hr.body.data.some((r: { reason?: string }) => r.reason === 'Trip')).toBe(true);
+    // The owner's inbox holds unmanaged people's requests, not the manager's reports'.
+    const owner = await call('get', 'owner', '/leave/requests?scope=review&limit=100');
+    expect(owner.status).toBe(200);
+    for (const r of owner.body.data)
+      expect(r.employeeId).not.toBe(String(t.people.employee.employeeId));
+    // Payroll reads everything (dates and types only).
     const pay = await call('get', 'payroll', '/leave/requests?scope=review&limit=100');
-    expect(pay.body.data.length).toBe(hr.body.data.length);
+    expect(pay.body.data.length).toBeGreaterThanOrEqual(
+      team.body.data.length + owner.body.data.length,
+    );
     expect(pay.body.data.every((r: { reason?: string }) => r.reason === undefined)).toBe(true);
     const foreign = await call('get', 'betaHr', '/leave/requests?scope=review&limit=100');
     expect(foreign.body.data).toHaveLength(0);
@@ -309,7 +318,7 @@ describe('attendance integration', () => {
     });
     expect(full.status).toBe(201);
     expect(
-      (await call('post', 'hr', `/leave/requests/${full.body.data.id}/approve`).send({})).status,
+      (await call('post', 'owner', `/leave/requests/${full.body.data.id}/approve`).send({})).status,
     ).toBe(200);
     const rows = await AttendanceDay.find({
       employeeId: t.people.employee2.employeeId,
@@ -325,7 +334,7 @@ describe('attendance integration', () => {
       halfDaySession: 'SECOND',
     });
     expect(half.body.data.days).toBe(0.5);
-    await call('post', 'hr', `/leave/requests/${half.body.data.id}/approve`).send({});
+    await call('post', 'owner', `/leave/requests/${half.body.data.id}/approve`).send({});
     const wed = await AttendanceDay.findOne({
       employeeId: t.people.employee2.employeeId,
       workDate: '2026-03-04',
@@ -362,7 +371,7 @@ describe('attendance integration', () => {
       endDate: '2026-04-07',
     });
     expect(
-      (await call('post', 'hr', `/leave/requests/${f.body.data.id}/approve`).send({})).status,
+      (await call('post', 'owner', `/leave/requests/${f.body.data.id}/approve`).send({})).status,
     ).toBe(200);
     expect(
       (await call('post', 'payroll', `/leave/requests/${f.body.data.id}/cancel`).send({})).status,

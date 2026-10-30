@@ -22,7 +22,11 @@ const employeeSchema = new Schema(
     phone: { type: String, maxlength: 30 },
     profileImage: { type: String },
     departmentId: { type: Schema.Types.ObjectId, ref: 'Department' },
-    designation: { type: String, maxlength: 120 },
+    designation: { type: String, maxlength: 120 }, // display title; copied from the designation when one is chosen
+    designationId: { type: Schema.Types.ObjectId, ref: 'Designation' },
+    dateOfBirth: { type: Date },
+    gender: { type: String, enum: ['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'] },
+    personalEmail: { type: String, lowercase: true, trim: true, maxlength: 254 },
     managerId: { type: Schema.Types.ObjectId, ref: 'Employee' },
     employmentType: { type: String, enum: EMPLOYMENT_TYPES, default: 'FULL_TIME' },
     employmentStatus: { type: String, enum: EMPLOYMENT_STATUSES, default: 'INVITED' },

@@ -151,7 +151,7 @@ describe('company settings', () => {
 });
 
 describe('approval lists include the employee reference', () => {
-  it('shows name and code for reviewers, scoped to the reviewer’s company', async () => {
+  it('shows name and code for the deciding manager, scoped to the reviewer’s company', async () => {
     clock.set(ist(MON, '09:00'));
     await post('employee', '/attendance/check-in', {
       idempotencyKey: newKey('ci'),
@@ -165,7 +165,7 @@ describe('approval lists include the employee reference', () => {
     });
     expect(c.status).toBe(201);
 
-    const list = await get('hr', '/attendance/corrections?status=PENDING');
+    const list = await get('manager', '/attendance/corrections?status=PENDING'); // the employee's manager decides
     expect(list.status).toBe(200);
     const row = list.body.data.find((r: { id: string }) => r.id === c.body.data.id);
     expect(row.employee).toEqual({

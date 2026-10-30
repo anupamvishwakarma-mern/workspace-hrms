@@ -3,6 +3,7 @@ import { isDuplicateKey } from '../../utils/mongo';
 import type { Request } from 'express';
 import type { Env } from '../../config/env';
 import { Department } from '../../database/models/department.model';
+import { Designation } from '../../database/models/designation.model';
 import { Employee, type EmploymentStatus } from '../../database/models/employee.model';
 import { nextSequence } from '../../database/models/counter.model';
 import { Membership, type TenantRole } from '../../database/models/membership.model';
@@ -25,6 +26,7 @@ const BASIC = [
   'lastName',
   'departmentId',
   'designation',
+  'designationId',
   'employmentType',
   'employmentStatus',
   'joiningDate',
@@ -33,6 +35,9 @@ const TEAM = [...BASIC, 'workEmail', 'phone', 'managerId', 'profileImage', 'last
 const SELF = [
   ...TEAM,
   'confirmationDate',
+  'dateOfBirth',
+  'gender',
+  'personalEmail',
   'noticePeriodStartDate',
   'emergencyContacts',
   'address',
@@ -144,7 +149,12 @@ export async function getEmployeeScoped(ctx: NonNullable<Request['tenantCtx']>, 
 
 export async function assertRefs(
   tenantId: Types.ObjectId,
-  refs: { departmentId?: string | null; managerId?: string | null; workLocationIds?: string[] },
+  refs: {
+    departmentId?: string | null;
+    designationId?: string | null;
+    managerId?: string | null;
+    workLocationIds?: string[];
+  },
   selfId?: string,
 ) {
   if (refs.workLocationIds?.length) {
@@ -157,6 +167,14 @@ export async function assertRefs(
   }
   if (refs.departmentId && !(await Department.exists({ _id: refs.departmentId, tenantId })))
     throw AppError.badRequest('departmentId does not reference a department in this company');
+  if (refs.designationId) {
+    const d = await Designation.findOne({ _id: refs.designationId, tenantId })
+      .select('status')
+      .lean();
+    if (!d)
+      throw AppError.badRequest('designationId does not reference a designation in this company');
+    if (d.status !== 'ACTIVE') throw AppError.badRequest('That designation is inactive');
+  }
   if (refs.managerId) {
     if (selfId && refs.managerId === selfId)
       throw AppError.badRequest('An employee cannot be their own manager');
@@ -207,6 +225,16 @@ export async function assertSeatAvailable(tenantId: Types.ObjectId) {
     );
 }
 
+/** The display title of a designation (so employees, payslips and letters keep a readable snapshot). */
+export async function designationTitle(
+  tenantId: Types.ObjectId,
+  designationId: unknown,
+): Promise<string | undefined> {
+  if (!designationId) return undefined;
+  const d = await Designation.findOne({ _id: designationId, tenantId }).select('title').lean();
+  return d?.title;
+}
+
 export async function createEmployee(
   tenantId: Types.ObjectId,
   actorId: Types.ObjectId,
@@ -215,8 +243,15 @@ export async function createEmployee(
   await assertSeatAvailable(tenantId);
   await assertRefs(
     tenantId,
-    input as { departmentId?: string; managerId?: string; workLocationIds?: string[] },
+    input as {
+      departmentId?: string;
+      designationId?: string;
+      managerId?: string;
+      workLocationIds?: string[];
+    },
   );
+  const title = await designationTitle(tenantId, input.designationId);
+  if (title) input = { ...input, designation: title };
   const create = (code: string) =>
     Employee.create({
       ...input,

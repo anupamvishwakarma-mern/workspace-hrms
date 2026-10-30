@@ -26,6 +26,9 @@ import {
 } from '@/lib/calendar';
 import { formatMinutes, formatTime, formatWorkDate } from '@/lib/format';
 import { usePrefs } from '@/prefs';
+import AttendanceInsights from '@/views/AttendanceInsights';
+import ManagerAttendance from '@/views/ManagerAttendance';
+import { useView } from '@/workspace';
 import { useTheme, type Theme } from '@/theme';
 
 type Kind = 'PRESENT' | 'HALF_DAY' | 'ABSENT' | 'LEAVE' | 'HOLIDAY' | 'OTHER';
@@ -40,7 +43,16 @@ const colorOf = (t: Theme, k: Kind): [string, string] =>
     OTHER: [t.muted, t.subtle],
   })[k] as [string, string];
 
+/** Attendance: company insights for owners and HR, the team for managers, the calendar for everyone's own days. */
 export default function Attendance() {
+  const { view } = useView();
+  if (view === 'owner') return <AttendanceInsights canAct={false} />;
+  if (view === 'hr') return <AttendanceInsights canAct />;
+  if (view === 'manager') return <ManagerAttendance />;
+  return <MyAttendance />;
+}
+
+function MyAttendance() {
   const t = useTheme();
   const { t: tr, lang } = usePrefs();
   const router = useRouter();

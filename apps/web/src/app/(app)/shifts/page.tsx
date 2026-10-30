@@ -1,21 +1,12 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PageTop } from '@/components/page-top';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
-import {
-  Alert,
-  Badge,
-  Empty,
-  PageHeader,
-  Skeleton,
-  Table,
-  Td,
-  Th,
-  statusTone,
-} from '@/components/ui/display';
+import { Alert, Badge, Empty, Skeleton, Table, Td, Th, statusTone } from '@/components/ui/display';
 import { Field, Input, Select } from '@/components/ui/form';
 import { useList, useSave } from '@/hooks/api';
 import { useDepartments } from '@/hooks/lookups';
@@ -71,7 +62,28 @@ export default function ShiftsPage() {
   const q = useList<Shift>('shifts', '/shifts', { limit: 100 });
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="shift rules"
+        stats={[
+          { label: 'Shifts', value: q.data?.data.length ?? '…' },
+          {
+            label: 'Overnight',
+            value: q.data ? q.data.data.filter((s) => s.overnight).length : '…',
+          },
+          {
+            label: 'Average grace',
+            value:
+              q.data && q.data.data.length
+                ? `${Math.round(q.data.data.reduce((n, s) => n + s.graceMinutes, 0) / q.data.data.length)} min`
+                : '…',
+            sub: 'Before a punch counts as late',
+          },
+        ]}
+        guide={[
+          'A shift sets the working hours, the grace period and when a day counts as full, half or short.',
+          'Assign shifts to people from a shift. Late, half-day and overtime are worked out from the shift.',
+          'Changing a shift only affects days calculated after the change.',
+        ]}
         title="Shifts"
         description="Shift rules drive late, half-day and overtime calculations. Changing a shift affects days calculated after the change."
         actions={<Button onClick={() => setEditing('new')}>Add shift</Button>}

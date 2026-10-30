@@ -1,10 +1,11 @@
 'use client';
 import { Plus } from 'lucide-react';
+import { PageTop } from '@/components/page-top';
 import { useState } from 'react';
 import { useAuth } from '@/components/auth';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
-import { Alert, Badge, Empty, PageHeader, Skeleton } from '@/components/ui/display';
+import { Alert, Badge, Empty, Skeleton } from '@/components/ui/display';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { useList, useSave } from '@/hooks/api';
 import { api } from '@/lib/api';
@@ -65,7 +66,31 @@ export default function HandbookPage() {
   const items = [...(q.data?.data ?? [])].sort((a, b) => a.order - b.order);
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope={manage ? 'edit and publish' : 'read'}
+        stats={[
+          { label: 'Sections', value: items.length },
+          {
+            label: 'Published',
+            value: items.filter((i) => i.status === 'PUBLISHED').length,
+            tone: 'success',
+          },
+          ...(manage
+            ? [
+                {
+                  label: 'Drafts',
+                  value: items.filter((i) => i.status === 'DRAFT').length,
+                  sub: 'Only editors see these',
+                },
+              ]
+            : []),
+        ]}
+        guide={[
+          'The handbook is the company policy everyone can read.',
+          manage
+            ? 'Add a section, write it, then publish. Drafts stay hidden from employees until published.'
+            : 'Sections are published by HR. Ask them if something is missing.',
+        ]}
         title={t('hb.title')}
         description={t('hb.desc')}
         actions={

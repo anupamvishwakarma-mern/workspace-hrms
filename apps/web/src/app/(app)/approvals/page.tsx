@@ -1,13 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { Pager } from '@/components/pager';
+import { PageTop } from '@/components/page-top';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
 import {
   Alert,
   Badge,
   Empty,
-  PageHeader,
   Skeleton,
   TabBar,
   Table,
@@ -36,12 +36,48 @@ export default function ApprovalsPage() {
   const [deciding, setDeciding] = useState<{ row: Row; action: 'approve' | 'reject' }>();
   const tz = useTenant().data?.data.timezone ?? 'UTC';
   const q = useList<Row>('approvals', `/attendance/${kind}`, { status, page, limit: LIMIT });
+  const waitingC = useList<Row>('approvals', '/attendance/corrections', {
+    status: 'PENDING',
+    limit: 1,
+  });
+  const waitingE = useList<Row>('approvals', '/attendance/exceptions', {
+    status: 'PENDING',
+    limit: 1,
+  });
+  const nC = waitingC.data?.meta?.total;
+  const nE = waitingE.data?.meta?.total;
 
   return (
     <>
-      <PageHeader
+      <PageTop
         title="Approvals"
+        scope="review and decide"
         description="Review correction and location-approval requests. You cannot approve your own."
+        stats={[
+          {
+            label: 'Corrections waiting',
+            value: nC ?? '…',
+            sub: 'Missed or wrong punches',
+            tone: nC ? 'warn' : 'success',
+          },
+          {
+            label: 'Location approvals waiting',
+            value: nE ?? '…',
+            sub: 'Punches outside the geofence',
+            tone: nE ? 'warn' : 'success',
+          },
+          {
+            label: 'Total waiting',
+            value: nC === undefined || nE === undefined ? '…' : nC + nE,
+            sub: 'Clear these before the attendance lock',
+          },
+        ]}
+        guide={[
+          'Corrections: an employee asks to change their first check-in or last check-out. Approving replaces the recorded times.',
+          'Location approvals: a punch was blocked because it was outside the allowed area. Approving records it with the time of the attempt.',
+          'Rejecting needs a short comment, which the employee can read.',
+          'Use the status filter to see what has already been decided.',
+        ]}
       />
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <TabBar
@@ -53,8 +89,8 @@ export default function ApprovalsPage() {
             setPage(1);
           }}
           tabs={[
-            { key: 'corrections', label: 'Corrections' },
-            { key: 'exceptions', label: 'Location approvals' },
+            { key: 'corrections', label: `Corrections${nC !== undefined ? ` · ${nC}` : ''}` },
+            { key: 'exceptions', label: `Location approvals${nE !== undefined ? ` · ${nE}` : ''}` },
           ]}
         />
         <Field label="Status">
@@ -165,7 +201,13 @@ export default function ApprovalsPage() {
               })}
             </tbody>
           </Table>
-          {q.data?.data.length === 0 ? <Empty>Nothing here.</Empty> : null}
+          {q.data?.data.length === 0 ? (
+            <Empty>
+              {status === 'PENDING'
+                ? 'All caught up. Nothing is waiting for you.'
+                : 'Nothing here.'}
+            </Empty>
+          ) : null}
           <Pager page={page} limit={LIMIT} total={q.data?.meta?.total ?? 0} onPage={setPage} />
         </>
       )}

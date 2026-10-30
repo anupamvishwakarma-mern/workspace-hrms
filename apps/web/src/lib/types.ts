@@ -51,6 +51,7 @@ export interface Shift {
     expectedUnpaidMinutes?: number;
   };
   weeklyOffDays: number[];
+  overtimePolicy?: { enabled?: boolean; thresholdMinutes?: number };
   status: string;
 }
 export interface ShiftAssignment {
@@ -109,6 +110,8 @@ export interface DayRow {
   overtimeMinutes: number;
   isOpen?: boolean;
   correctionStatus?: string;
+  shiftId?: string;
+  scheduledMinutes?: number;
   employee?: { id: string; employeeCode: string; firstName: string; lastName: string };
 }
 export interface Correction {
@@ -346,4 +349,101 @@ export interface TeamToday {
   date: string;
   counts: Record<string, number>;
   members: TeamMember[];
+}
+
+/* ---- company insights (owner / HR) ---- */
+export interface LiveCounts {
+  headcount: number;
+  present: number;
+  onLeave: number;
+  absent: number;
+  notIn: number;
+  off: number;
+  unscheduled: number;
+}
+export interface LiveSnapshot extends LiveCounts {
+  workDate: string;
+  expected: number;
+  rate: number | null;
+  lateToday: number;
+  byDepartment: (LiveCounts & { departmentId: string; name: string })[];
+}
+export interface InsightMetrics {
+  attendanceRate: number | null;
+  absenteeism: number | null;
+  lateRate: number | null;
+  avgNetMinutes: number | null;
+  overtimeMinutes: number;
+}
+export interface Overview {
+  month: string;
+  previousMonth: string;
+  headcount: number;
+  locations: number;
+  basis: string;
+  live: LiveSnapshot;
+  current: InsightMetrics;
+  previous: InsightMetrics;
+  trend: { month: string; attendanceRate: number | null }[];
+  weekday: { day: string; dayIndex: number; absenteeism: number | null; expected: number }[];
+  byDepartment: (InsightMetrics & { departmentId: string; name: string; headcount: number })[];
+  byLocation: {
+    locationId: string;
+    name: string;
+    headcount: number;
+    attendanceRate: number | null;
+  }[];
+  attention: {
+    lateMarkLimit: { limit: number; count: number };
+    absentStreak: { days: number; count: number };
+    highOvertime: { hours: number; count: number };
+    overdueApprovals: { days: number; count: number };
+    teamsBelowFloor: { floor: number; names: string[] };
+  };
+  compliance: {
+    previousMonthPayroll: string | null;
+    currentMonthPayroll: string | null;
+    geofenceRequired: boolean;
+    activeLocations: number;
+    manualEditsApproved: number;
+    openLocationExceptions: number;
+  };
+}
+
+export interface LeaveOverview {
+  month: string;
+  previousMonth: string;
+  today: string;
+  headcount: number;
+  basis: string;
+  onLeaveToday: { people: number; headcount: number };
+  next7: { date: string; people: number }[];
+  current: { days: number; unplannedShare: number | null };
+  previous: { days: number; unplannedShare: number | null };
+  daysPerPerson6m: number;
+  totalDays6m: number;
+  trend: { month: string; days: number }[];
+  byType: { name: string; days: number; share: number }[];
+  plannedShare: number | null;
+  unplannedShare6m: number | null;
+  byDepartment: {
+    departmentId: string;
+    name: string;
+    headcount: number;
+    daysPerPerson: number;
+    unplannedShare: number | null;
+    avgUnused: number;
+    highUnused: number;
+    peakOff: { off: number; headcount: number; pct: number };
+  }[];
+  coverage: { department: string; weekStart: string; off: number; headcount: number; pct: number }[];
+  liability: { unusedDays: number; paidUnusedDays: number; avgUnusedPerPerson: number };
+  attention: {
+    highUnused: { days: number; count: number };
+    noLeave: { months: number; count: number };
+    pastWindow: { days: number; count: number };
+    negativeBalances: number;
+    crowdedTeams: { pct: number; names: string[] };
+  };
+  policy: { id: string; name: string; code: string; paid: boolean; annualAllowanceDays: number; allowHalfDay: boolean }[];
 }

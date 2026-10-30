@@ -1,20 +1,11 @@
 'use client';
 import { Plus } from 'lucide-react';
+import { PageTop } from '@/components/page-top';
 import { useState } from 'react';
 import { Pager } from '@/components/pager';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
-import {
-  Alert,
-  Badge,
-  Empty,
-  PageHeader,
-  Skeleton,
-  TabBar,
-  Table,
-  Td,
-  Th,
-} from '@/components/ui/display';
+import { Alert, Badge, Empty, Skeleton, TabBar, Table, Td, Th } from '@/components/ui/display';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { useList, useOne, useSave } from '@/hooks/api';
 import { api } from '@/lib/api';
@@ -35,9 +26,21 @@ export default function LettersPage() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('issued');
   const [issuing, setIssuing] = useState(false);
+  const issuedQ = useList<IssuedLetter>('letters', '/letters', { page: 1, limit: 25 });
+  const tplQ = useList<LetterTemplate>('letter-templates', '/letter-templates', { limit: 100 });
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="issue and track letters"
+        stats={[
+          { label: 'Letters issued', value: issuedQ.data?.meta?.total ?? '…' },
+          { label: 'Templates', value: tplQ.data?.data.length ?? '…' },
+        ]}
+        guide={[
+          'Pick a template, choose the employee and issue. Placeholders such as the name and designation are filled in for you.',
+          'Each letter gets a reference number. Revoke a letter with a reason if it was issued by mistake.',
+          'Edit templates under the Templates tab.',
+        ]}
         title={t('let.title')}
         description={t('let.desc')}
         actions={

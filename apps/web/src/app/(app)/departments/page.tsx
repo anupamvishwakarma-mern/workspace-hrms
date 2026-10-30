@@ -1,22 +1,13 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PageTop } from '@/components/page-top';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAuth } from '@/components/auth';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
-import {
-  Alert,
-  Badge,
-  Empty,
-  PageHeader,
-  Skeleton,
-  Table,
-  Td,
-  Th,
-  statusTone,
-} from '@/components/ui/display';
+import { Alert, Badge, Empty, Skeleton, Table, Td, Th, statusTone } from '@/components/ui/display';
 import { Field, Input, Select } from '@/components/ui/form';
 import { useList, useSave } from '@/hooks/api';
 import { api } from '@/lib/api';
@@ -45,7 +36,25 @@ export default function DepartmentsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="company structure"
+        stats={[
+          { label: 'Departments', value: q.data?.data.length ?? '…' },
+          {
+            label: 'Active',
+            value: q.data ? q.data.data.filter((d) => d.status === 'ACTIVE').length : '…',
+            tone: 'success',
+          },
+          {
+            label: 'With a head',
+            value: q.data ? q.data.data.filter((d) => d.headEmployeeId).length : '…',
+          },
+        ]}
+        guide={[
+          'Departments group people for reports, such as headcount and attendance by team.',
+          'Set a head so approvals and reports have an owner.',
+          'Deactivate a department instead of deleting it so past reports stay correct.',
+        ]}
         title="Departments"
         actions={<Button onClick={() => setEditing('new')}>Add department</Button>}
       />

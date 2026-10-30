@@ -4,18 +4,21 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/auth/AuthProvider';
-import { Body, Button, Center, H1, Loading } from '@/components/ui';
+import { Splash } from '@/components/Splash';
+import { Body, Button, Center, H1 } from '@/components/ui';
 import { useAppStateFocus } from '@/hooks/queries';
 import { useTheme } from '@/theme';
 import { ApiError } from '@/lib/errors';
 import { PrefsProvider, useT } from '@/prefs';
+import { WorkspaceProvider, useFirstRun } from '@/workspace';
 
 function Gate() {
   const t = useTheme();
   const tr = useT();
   const { status, signOut, retry } = useAuth();
+  const { step } = useFirstRun();
   useAppStateFocus();
-  if (status === 'loading') return <Loading />;
+  if (status === 'loading') return <Splash />;
   if (status === 'offline')
     return (
       <Center>
@@ -36,7 +39,13 @@ function Gate() {
     );
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={status === 'ready'}>
+      <Stack.Protected guard={status === 'ready' && step === 'permissions'}>
+        <Stack.Screen name="permissions" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'ready' && step === 'workspace'}>
+        <Stack.Screen name="workspace" />
+      </Stack.Protected>
+      <Stack.Protected guard={status === 'ready' && step === null}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="hr" />
         <Stack.Screen
@@ -54,6 +63,7 @@ function Gate() {
       </Stack.Protected>
       <Stack.Protected guard={status === 'signedOut'}>
         <Stack.Screen name="login" />
+        <Stack.Screen name="forgot" />
       </Stack.Protected>
       <Stack.Protected guard={status === 'needsCompany'}>
         <Stack.Screen name="company" />
@@ -79,8 +89,10 @@ export default function RootLayout() {
       <QueryClientProvider client={client}>
         <PrefsProvider>
           <AuthProvider>
-            <StatusBar style="auto" />
-            <Gate />
+            <WorkspaceProvider>
+              <StatusBar style="auto" />
+              <Gate />
+            </WorkspaceProvider>
           </AuthProvider>
         </PrefsProvider>
       </QueryClientProvider>

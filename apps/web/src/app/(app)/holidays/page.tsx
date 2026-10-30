@@ -1,12 +1,14 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PageTop } from '@/components/page-top';
+import { DonutChart, Panel } from '../dashboard/charts';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Pager } from '@/components/pager';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
-import { Alert, Badge, Empty, PageHeader, Skeleton, Table, Td, Th } from '@/components/ui/display';
+import { Alert, Badge, Empty, Skeleton, Table, Td, Th } from '@/components/ui/display';
 import { Field, Input, Select } from '@/components/ui/form';
 import { useList, useSave } from '@/hooks/api';
 import { api } from '@/lib/api';
@@ -30,11 +32,43 @@ export default function HolidaysPage() {
   const locs = useList<WorkLocation>('locations', '/work-locations', { limit: 100 });
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="holiday calendar"
+        stats={[
+          { label: 'Holidays listed', value: q.data?.meta?.total ?? '…' },
+          {
+            label: 'Location-specific',
+            value: q.data ? q.data.data.filter((h) => h.workLocationId).length : '…',
+            sub: 'On this page',
+          },
+          {
+            label: 'Company-wide',
+            value: q.data ? q.data.data.filter((h) => !h.workLocationId).length : '…',
+            sub: 'On this page',
+          },
+        ]}
+        guide={[
+          'A holiday is not charged as leave and does not count as absent.',
+          'Leave a location empty for a company-wide holiday, or pick a location so it only applies to people assigned there.',
+          'Employees see upcoming holidays on their dashboard and leave page.',
+        ]}
         title="Holidays"
         description="Active holidays. A holiday limited to a location applies only to employees assigned there."
         actions={<Button onClick={() => setEditing('new')}>Add holiday</Button>}
       />
+      {q.data && q.data.data.length > 0 ? (
+        <Panel title="Holidays by type" className="mb-5">
+          <DonutChart
+            pie
+            data={Object.entries(
+              q.data.data.reduce<Record<string, number>>(
+                (m, h) => ({ ...m, [h.holidayType]: (m[h.holidayType] ?? 0) + 1 }),
+                {},
+              ),
+            ).map(([name, value]) => ({ name: label(name), value }))}
+          />
+        </Panel>
+      ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!q.data ? (
         q.isError ? null : (

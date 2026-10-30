@@ -4,3 +4,14 @@ export const canSeeTeam = (roles: readonly string[] | undefined) =>
   !!roles?.some((r) => (TEAM_ROLES as readonly string[]).includes(r));
 export const seesEveryone = (roles: readonly string[] | undefined) =>
   !!roles?.some((r) => r === 'HR_ADMIN' || r === 'COMPANY_OWNER');
+
+export type RoleView = 'owner' | 'hr' | 'manager' | 'employee';
+/** The highest role decides which version of each tab a person gets. The server still enforces scope. */
+export const roleViewOf = (roles: readonly string[] | undefined): RoleView =>
+  roles?.includes('COMPANY_OWNER')
+    ? 'owner'
+    : roles?.includes('HR_ADMIN')
+      ? 'hr'
+      : roles?.includes('MANAGER')
+        ? 'manager'
+        : 'employee';

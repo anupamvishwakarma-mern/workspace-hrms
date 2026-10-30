@@ -2,8 +2,9 @@
 import { Download } from 'lucide-react';
 import { useState } from 'react';
 import { Pager } from '@/components/pager';
+import { PageTop } from '@/components/page-top';
 import { Button } from '@/components/ui/button';
-import { Alert, Card, Empty, PageHeader, Skeleton, Table, Td, Th } from '@/components/ui/display';
+import { Alert, Card, Empty, Skeleton, Table, Td, Th } from '@/components/ui/display';
 import { Field, Input, Select } from '@/components/ui/form';
 import { useList } from '@/hooks/api';
 import { useDepartments, useTenant } from '@/hooks/lookups';
@@ -59,10 +60,44 @@ export default function ReportsPage() {
     }
   }
 
+  const rows = q.data?.data ?? [];
+  const sum = (k: 'present' | 'halfDay' | 'absent' | 'onLeave' | 'lateDays' | 'overtimeMinutes') =>
+    rows.reduce((n, r) => n + r[k], 0);
+  const days =
+    start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1 : 0;
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="reports and exports"
+        stats={[
+          { label: 'People in scope', value: q.data?.meta?.total ?? '…' },
+          {
+            label: 'Period',
+            value: `${days} days`,
+            sub: start && end ? `${start} to ${end}` : undefined,
+          },
+          { label: 'Present days', value: sum('present'), sub: 'On this page', tone: 'success' },
+          {
+            label: 'Absent days',
+            value: sum('absent'),
+            sub: 'On this page',
+            tone: sum('absent') ? 'danger' : 'neutral',
+          },
+          {
+            label: 'Late days',
+            value: sum('lateDays'),
+            sub: 'On this page',
+            tone: sum('lateDays') ? 'warn' : 'neutral',
+          },
+        ]}
+        guide={[
+          'Pick a date range (up to 93 days) and optionally a department. The table lists one row per person.',
+          'Summary CSV downloads one row per person. Daily CSV downloads one row per person per day.',
+          'Today is left out of the default range because it is still in progress.',
+          'Every export is recorded in the audit log.',
+        ]}
         title="Reports"
+
         description="Attendance totals per employee. Range up to 93 days. Every export is recorded in the audit log."
         actions={
           <>

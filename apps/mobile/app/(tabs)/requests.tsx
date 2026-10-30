@@ -18,17 +18,32 @@ import { useMyCorrections, useMyExceptions, useToday } from '@/hooks/queries';
 import { userMessage } from '@/lib/errors';
 import { EVENT_LABEL, formatTime, formatWorkDate } from '@/lib/format';
 import { useT } from '@/prefs';
+import Approvals from '@/views/Approvals';
+import EmployeeLeave from '@/views/EmployeeLeave';
+import OwnerOversight from '@/views/OwnerOversight';
+import { useView } from '@/workspace';
 
-type Tab = 'corrections' | 'exceptions';
+type Tab = 'leave' | 'corrections' | 'exceptions';
 
+/** Requests: HR and managers decide them, owners watch the queue, employees track their own. */
 export default function Requests() {
+  const { view } = useView();
+  if (view === 'hr')
+    return <Approvals scopeLabel="Leave, corrections and location requests across the company." />;
+  if (view === 'manager')
+    return <Approvals scopeLabel="Requests from your team. Approve within 2 working days." />;
+  if (view === 'owner') return <OwnerOversight />;
+  return <MyRequests />;
+}
+
+function MyRequests() {
   const tr = useT();
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>('corrections');
+  const [tab, setTab] = useState<Tab>('leave');
   const corrections = useMyCorrections();
   const exceptions = useMyExceptions();
   const tz = useToday().data?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const q = tab === 'corrections' ? corrections : exceptions;
+  const q = tab === 'exceptions' ? exceptions : corrections;
 
   return (
     <Screen onRefresh={() => void q.refetch()} refreshing={q.isRefetching}>
@@ -37,12 +52,15 @@ export default function Requests() {
         value={tab}
         onChange={setTab}
         options={[
+          { key: 'leave', label: 'Leave' },
           { key: 'corrections', label: tr('req.corrections') },
           { key: 'exceptions', label: tr('req.locationApprovals') },
         ]}
       />
 
-      {tab === 'corrections' ? (
+      {tab === 'leave' ? <EmployeeLeave /> : null}
+
+      {tab === 'leave' ? null : tab === 'corrections' ? (
         <Button title={tr('req.new')} onPress={() => router.push('/correction/new')} />
       ) : (
         <Body muted small>
@@ -50,8 +68,8 @@ export default function Requests() {
         </Body>
       )}
 
-      {q.isPending ? <Loading /> : null}
-      {q.isError ? <Banner tone="danger">{userMessage(q.error)}</Banner> : null}
+      {tab !== 'leave' && q.isPending ? <Loading /> : null}
+      {tab !== 'leave' && q.isError ? <Banner tone="danger">{userMessage(q.error)}</Banner> : null}
 
       {tab === 'corrections' && corrections.data ? (
         corrections.data.length === 0 ? (

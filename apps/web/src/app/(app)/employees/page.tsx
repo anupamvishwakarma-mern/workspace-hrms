@@ -1,5 +1,8 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PageTop } from '@/components/page-top';
+import { DonutChart, Panel } from '../dashboard/charts';
+import { useToday, useWorkforce } from '../dashboard/data';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -13,7 +16,6 @@ import {
   Avatar,
   Badge,
   Empty,
-  PageHeader,
   Skeleton,
   TabBar,
   Table,
@@ -45,9 +47,40 @@ export default function EmployeesPage() {
     limit: LIMIT,
     ...compact({ search: search.trim(), status, departmentId }),
   });
+  const { today } = useToday();
+  const activeQ = useList<Employee>('employees', '/employees', { status: 'ACTIVE', limit: 1 });
+  const noticeQ = useList<Employee>('employees', '/employees', {
+    status: 'NOTICE_PERIOD',
+    limit: 1,
+  });
+  const wf = useWorkforce(today.slice(0, 7));
+  const byDept = [...wf.data.byDepartment.entries()]
+    .map(([id, value]) => ({ name: depts.name(id) ?? 'No department', value }))
+    .sort((a, b) => b.value - a.value);
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="people directory"
+        stats={[
+          {
+            label: 'Employed',
+            value: wf.isPending ? '…' : wf.data.headcount,
+            sub: 'Active, on leave or on notice',
+          },
+          { label: 'Active', value: activeQ.data?.meta?.total ?? '…', tone: 'success' },
+          {
+            label: 'On notice',
+            value: noticeQ.data?.meta?.total ?? '…',
+            tone: (noticeQ.data?.meta?.total ?? 0) > 0 ? 'warn' : 'neutral',
+          },
+          { label: 'Departments', value: depts.items.length },
+        ]}
+        guide={[
+          'Search by name or code, or filter by status and department. Select a person to open their profile, documents and pay structure.',
+          'Managers see their own team. HR and owners see everyone.',
+          'Set a last working day to move someone to notice period. They stay visible until they leave.',
+          'Add employee creates the profile. Invite them to sign in from the profile once their work email is set.',
+        ]}
         title="Employees"
         actions={
           can('employee:create') ? (
@@ -55,6 +88,14 @@ export default function EmployeesPage() {
           ) : null
         }
       />
+      <Panel title="People by department" className="mb-5">
+        <DonutChart
+          center={wf.data.headcount}
+          centerSub="people"
+          data={byDept}
+          empty="No employees yet."
+        />
+      </Panel>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Search">
           {(id) => (

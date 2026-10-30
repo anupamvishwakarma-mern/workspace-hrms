@@ -74,7 +74,10 @@ describe('public company signup', () => {
     const dup = await request(app)
       .post('/api/v1/signup')
       .send(body({ owner: { email: 'other@zeta.test', firstName: 'O', lastName: 'T' } }));
-    expect(dup.status).toBe(409); // slug zeta-corp is taken
+    // Same company name without an explicit slug: a unique slug is generated instead of failing.
+    expect(dup.status).toBe(201);
+    expect(dup.body.data.company.slug).not.toBe('zeta-corp');
+    expect(dup.body.data.company.slug).toMatch(/^zeta-corp-/);
     const dupSlug = await request(app)
       .post('/api/v1/signup')
       .send(body({ name: 'Other', slug: 'zeta-corp', owner: { email: 'x@zeta.test', firstName: 'X', lastName: 'Y' } }));

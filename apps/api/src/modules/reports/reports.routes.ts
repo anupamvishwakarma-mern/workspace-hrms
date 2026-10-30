@@ -16,7 +16,7 @@ import { writeAudit } from '../audit/audit.service';
 import { hasPermission } from '../auth/permissions';
 import { addDays, isRealDate, localDate, WORK_DATE_RE } from '../attendance/dates';
 import { computeDay, loadTenant } from '../attendance/attendance.service';
-import { teamScope } from '../attendance/review.service';
+import { approvalScope, teamScope } from '../attendance/review.service';
 import { buildSummary, ensureDays, scopedEmployees } from './reports.service';
 
 const date = z
@@ -141,7 +141,7 @@ export function registerReportRoutes(v1: Router, env: Env, deps: { clock: Clock 
         hasPermission(ctx.roles, 'attendance:review:all') ||
         hasPermission(ctx.roles, 'attendance:review:team')
       ) {
-        const rscope = await teamScope(ctx, 'attendance:review:all', 'attendance:review:team');
+        const rscope = await approvalScope(ctx);
         // A reviewer cannot approve their own request, so those are not "waiting on them".
         const ownerFilter = rscope
           ? { employeeId: { $in: rscope.filter((i) => String(i) !== String(ctx.employeeId)) } }

@@ -28,7 +28,13 @@ import {
   type PunchOutcome,
 } from './attendance.service';
 import { notifyEmployee } from '../notifications/push.service';
-import { createCorrection, reviewCorrection, reviewException, teamScope } from './review.service';
+import {
+  approvalScope,
+  createCorrection,
+  reviewCorrection,
+  reviewException,
+  teamScope,
+} from './review.service';
 import { latitude, longitude } from '../locations/locations.routes';
 import { registerPhotoRoutes } from './photos';
 
@@ -674,7 +680,7 @@ export function registerAttendanceRoutes(v1: Router, env: Env, deps: { clock: Cl
       method: 'get',
       path: '/attendance/corrections',
       summary:
-        'List corrections: own for employees, direct reports for managers, everyone for HR/owner.',
+        'List corrections: your own, plus those you decide (direct reports for managers; unmanaged people for the owner).',
       tags: ['Attendance corrections'],
       auth: 'tenant',
       permission: 'attendance:read:self',
@@ -686,8 +692,11 @@ export function registerAttendanceRoutes(v1: Router, env: Env, deps: { clock: Cl
     asyncHandler(async (req, res) => {
       const q = req.query as unknown as z.infer<typeof listReviewQuery>;
       const ctx = req.tenantCtx!;
-      const scope = await teamScope(ctx, 'attendance:review:all', 'attendance:review:team');
-      let ids = scope;
+      // Own requests plus the ones this person decides (reports, plus unmanaged people for the owner).
+      const scope = await approvalScope(ctx);
+      const own = ctx.employeeId as unknown as Types.ObjectId | undefined;
+      const ids0 = own && !scope.some((i) => String(i) === String(own)) ? [...scope, own] : scope;
+      let ids = ids0;
       if (q.employeeId)
         ids =
           !ids || ids.some((i) => String(i) === q.employeeId)
@@ -808,7 +817,7 @@ export function registerAttendanceRoutes(v1: Router, env: Env, deps: { clock: Cl
     asyncHandler(async (req, res) => {
       const q = req.query as unknown as z.infer<typeof listReviewQuery>;
       const ctx = req.tenantCtx!;
-      const scope = await teamScope(ctx, 'attendance:review:all', 'attendance:review:team');
+      const scope = await approvalScope(ctx);
       let ids = scope;
       if (q.employeeId)
         ids =

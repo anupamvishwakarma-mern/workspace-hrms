@@ -6,6 +6,7 @@ import { Divider, NavRow } from '@/components/state';
 import type { IconName } from '@/components/icons';
 import type { Key } from '@/i18n';
 import { useT } from '@/prefs';
+import MeExtras from '@/views/MeExtras';
 
 interface Item {
   icon: IconName;
@@ -57,6 +58,7 @@ export default function More() {
           </View>
         </View>
       </Card>
+      <MeExtras />
       {SECTIONS.map((sec) => (
         <Card key={sec.title}>
           <Eyebrow>{t(sec.title)}</Eyebrow>

@@ -35,6 +35,11 @@ import type { AllowedAction, EventType } from '@/lib/schemas';
 import { useTheme } from '@/theme';
 import { useT } from '@/prefs';
 import type { Key } from '@/i18n';
+import EmployeeExtras from '@/views/EmployeeExtras';
+import HrHome from '@/views/HrHome';
+import ManagerHome from '@/views/ManagerHome';
+import OwnerHome from '@/views/OwnerHome';
+import { useView } from '@/workspace';
 
 const BUTTON_LABEL: Record<EventType, Key> = {
   CHECK_IN: 'today.checkIn',
@@ -49,7 +54,16 @@ interface GeoPrompt {
   allowRequest: boolean;
 }
 
-export default function Today() {
+/** Home: owners, HR and managers get their own overview; everyone can switch to their own punch screen. */
+export default function Home() {
+  const { view } = useView();
+  if (view === 'owner') return <OwnerHome />;
+  if (view === 'hr') return <HrHome />;
+  if (view === 'manager') return <ManagerHome />;
+  return <EmployeeToday />;
+}
+
+function EmployeeToday() {
   const tr = useT();
   const t = useTheme();
   const router = useRouter();
@@ -425,6 +439,8 @@ export default function Today() {
           ))
         )}
       </Card>
+
+      <EmployeeExtras today={d.workDate} />
     </Screen>
   );
 }

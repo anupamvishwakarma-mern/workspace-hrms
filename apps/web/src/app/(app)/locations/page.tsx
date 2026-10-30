@@ -1,21 +1,12 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PageTop } from '@/components/page-top';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
-import {
-  Alert,
-  Badge,
-  Empty,
-  PageHeader,
-  Skeleton,
-  Table,
-  Td,
-  Th,
-  statusTone,
-} from '@/components/ui/display';
+import { Alert, Badge, Empty, Skeleton, Table, Td, Th, statusTone } from '@/components/ui/display';
 import { Field, Input, Select } from '@/components/ui/form';
 import { useList, useSave } from '@/hooks/api';
 import { api } from '@/lib/api';
@@ -48,7 +39,28 @@ export default function LocationsPage() {
   const q = useList<WorkLocation>('locations', '/work-locations', { limit: 100 });
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="geofences"
+        stats={[
+          { label: 'Locations', value: q.data?.data.length ?? '…' },
+          {
+            label: 'Active',
+            value: q.data ? q.data.data.filter((l) => l.status === 'ACTIVE').length : '…',
+            tone: 'success',
+          },
+          {
+            label: 'Average radius',
+            value:
+              q.data && q.data.data.length
+                ? `${Math.round(q.data.data.reduce((n, l) => n + l.radiusMeters, 0) / q.data.data.length)} m`
+                : '…',
+          },
+        ]}
+        guide={[
+          'A location is a map point with a radius. Office punches are checked against it.',
+          'Pick a radius that covers the whole building and car park. Too small and valid punches are blocked.',
+          'A phone location is a signal, not proof. Blocked punches go to Approvals for a person to decide.',
+        ]}
         title="Work locations"
         description="Geofences used to check office punches. A phone’s location is a signal, not proof of presence."
         actions={<Button onClick={() => setEditing('new')}>Add location</Button>}

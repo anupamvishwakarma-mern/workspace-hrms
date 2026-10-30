@@ -179,7 +179,8 @@ describe('approval workflow', () => {
   it('cannot be decided twice', async () => {
     expect((await post('manager', `/attendance/corrections/${id}/approve`)).status).toBe(409);
     expect(
-      (await post('hr', `/attendance/corrections/${id}/reject`, { comment: 'too late' })).status,
+      (await post('manager', `/attendance/corrections/${id}/reject`, { comment: 'too late' }))
+        .status,
     ).toBe(409);
   });
 
@@ -195,9 +196,9 @@ describe('approval workflow', () => {
       }),
     );
     const results = await Promise.all([
-      post('hr', `/attendance/corrections/${c.body.data.id}/approve`),
       post('owner', `/attendance/corrections/${c.body.data.id}/approve`),
-      post('hr', `/attendance/corrections/${c.body.data.id}/approve`),
+      post('owner', `/attendance/corrections/${c.body.data.id}/approve`),
+      post('owner', `/attendance/corrections/${c.body.data.id}/approve`),
     ]);
     expect(results.filter((r) => r.status === 200)).toHaveLength(1);
     expect(results.filter((r) => r.status === 409)).toHaveLength(2);
@@ -256,9 +257,10 @@ describe('self-approval policy', () => {
     expect((await post('owner', `/attendance/corrections/${c.body.data.id}/approve`)).status).toBe(
       403,
     );
+    // HR does not decide on someone else's behalf any more: the owner has no manager, so nobody else can.
     expect((await post('hr', `/attendance/corrections/${c.body.data.id}/approve`)).status).toBe(
-      200,
-    ); // someone else may
+      404,
+    );
     const c2 = await post('owner', '/attendance/corrections', {
       workDate: '2026-03-02',
       checkIn: ist(MON, '09:00').toISOString(),
@@ -292,7 +294,7 @@ describe('self-approval policy', () => {
 });
 
 describe('listing scope', () => {
-  it('employees see their own; managers see themselves and reports; HR sees all', async () => {
+  it('employees see their own; managers see themselves and reports; the owner sees own plus unmanaged people', async () => {
     const mineIds = (await get('employee', '/attendance/corrections')).body.data.map(
       (c: { employeeId: string }) => c.employeeId,
     );
@@ -305,8 +307,8 @@ describe('listing scope', () => {
         [String(t.people.manager.employeeId), String(t.people.employee.employeeId)].includes(id),
       ),
     ).toBe(true);
-    const all = (await get('hr', '/attendance/corrections?limit=100')).body.meta.total;
-    expect(all).toBeGreaterThanOrEqual(5);
+    const all = (await get('owner', '/attendance/corrections?limit=100')).body.meta.total;
+    expect(all).toBeGreaterThanOrEqual(1);
   });
 });
 

@@ -1,20 +1,13 @@
 'use client';
 import { Plus, Trash2 } from 'lucide-react';
+import { PageTop } from '@/components/page-top';
+import { Columns, Panel } from '../dashboard/charts';
+import { StatStrip } from '@/components/page-top';
 import { useState } from 'react';
 import { Pager } from '@/components/pager';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
-import {
-  Alert,
-  Badge,
-  Empty,
-  PageHeader,
-  Skeleton,
-  TabBar,
-  Table,
-  Td,
-  Th,
-} from '@/components/ui/display';
+import { Alert, Badge, Empty, Skeleton, TabBar, Table, Td, Th } from '@/components/ui/display';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { useList, useOne, useSave } from '@/hooks/api';
 import { api } from '@/lib/api';
@@ -32,7 +25,12 @@ export default function PayrollPage() {
   const [tab, setTab] = useState<Tab>('runs');
   return (
     <>
-      <PageHeader title={t('pay.title')} description={t('pay.desc')} />
+      <PageTop
+        scope="runs and salary structures"
+        title={t('pay.title')}
+        description={t('pay.desc')}
+      />
+      {tab === 'runs' ? <PayrollSummary /> : null}
       <TabBar
         label="Payroll sections"
         value={tab}
@@ -604,5 +602,50 @@ function StructureForm({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Headline numbers and a net-pay trend from the latest runs. */
+function PayrollSummary() {
+  const q = useList<PayrollRun>('payroll-runs', '/payroll/runs', { page: 1, limit: 12 });
+  const runs = [...(q.data?.data ?? [])].sort((a, b) => a.month.localeCompare(b.month));
+  const last = runs[runs.length - 1];
+  const drafts = runs.filter((r) => r.status === 'DRAFT').length;
+  return (
+    <>
+      <StatStrip
+        stats={[
+          {
+            label: 'Latest run',
+            value: last ? last.month : '—',
+            sub: last ? last.status.toLowerCase() : 'No run yet',
+          },
+          {
+            label: 'Net pay, latest',
+            value: last?.totals ? formatMoney(last.totals.netMinor, 'INR') : '—',
+          },
+          { label: 'People paid', value: last?.totals?.employees ?? '—' },
+          {
+            label: 'Drafts to publish',
+            value: drafts,
+            tone: drafts ? 'warn' : 'success',
+            sub: 'Employees see payslips once published',
+          },
+        ]}
+      />
+      {runs.length > 1 ? (
+        <Panel title="Net pay by month" sub="Latest runs, in rupees" className="mb-5">
+          <Columns
+            label="Net pay for each of the latest payroll runs"
+            height={190}
+            data={runs.map((r) => ({
+              label: r.month.slice(2),
+              value: Math.round((r.totals?.netMinor ?? 0) / 100),
+            }))}
+            format={(n) => n.toLocaleString('en-IN')}
+          />
+        </Panel>
+      ) : null}
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,12 +14,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '@/components/icons';
 import { radius, useIsDark, useTheme, type Theme } from '@/theme';
 
+/** Set by screens that sit under the app bar, which already covers the status bar area. */
+export const UnderHeaderContext = createContext(false);
+
 export function Screen({
   children,
   onRefresh,
   refreshing,
   padded = true,
-  underHeader,
+  underHeader: underHeaderProp,
 }: {
   children: ReactNode;
   onRefresh?: () => void;
@@ -29,6 +32,8 @@ export function Screen({
   underHeader?: boolean;
 }) {
   const t = useTheme();
+  const inherited = useContext(UnderHeaderContext);
+  const underHeader = underHeaderProp ?? inherited;
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: t.bg }}

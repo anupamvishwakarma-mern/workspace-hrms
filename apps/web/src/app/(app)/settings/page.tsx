@@ -1,10 +1,11 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PageTop } from '@/components/page-top';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
-import { Alert, Card, PageHeader, Skeleton } from '@/components/ui/display';
+import { Alert, Card, Skeleton } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/form';
 import { useSave } from '@/hooks/api';
 import { useTenant } from '@/hooks/lookups';
@@ -74,7 +75,28 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="company policy"
+        stats={[
+          { label: 'Time zone', value: q.data?.data.timezone ?? '…' },
+          {
+            label: 'Working days',
+            value: q.data ? q.data.data.workweek.map((d) => WEEKDAYS[d]).join(', ') : '…',
+          },
+          {
+            label: 'Geofence',
+            value: q.data
+              ? q.data.data.settings?.attendance?.requireGeofence
+                ? 'Required'
+                : 'Not required'
+              : '…',
+          },
+        ]}
+        guide={[
+          'Company profile and attendance policy for everyone in the company.',
+          'Working days decide weekly offs, and which days leave is charged.',
+          'Changes apply to new punches and new reports. Past days are not recalculated.',
+        ]}
         title="Settings"
         description="Company profile and attendance policy. Changes apply to new punches and new reports."
       />

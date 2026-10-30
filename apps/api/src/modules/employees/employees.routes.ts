@@ -43,6 +43,12 @@ const emergencyContacts = z
       .strict(),
   )
   .max(5);
+const gender = z.enum(['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED']);
+const personalEmail = z
+  .string()
+  .email()
+  .max(254)
+  .transform((s) => s.toLowerCase());
 const phone = z.string().regex(/^[0-9+()\-\s]{5,30}$/, 'Invalid phone number');
 
 const createBody = z
@@ -58,6 +64,10 @@ const createBody = z
     phone: phone.optional(),
     departmentId: objectId.optional(),
     designation: z.string().max(120).optional(),
+    designationId: objectId.optional(),
+    dateOfBirth: dateInput.optional(),
+    gender: gender.optional(),
+    personalEmail: personalEmail.optional(),
     managerId: objectId.optional(),
     employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
     attendanceMode: z.enum(['OFFICE', 'FIELD', 'REMOTE']).optional(),
@@ -75,6 +85,10 @@ const adminPatchBody = z
     phone,
     departmentId: objectId.nullable(),
     designation: z.string().max(120),
+    designationId: objectId.nullable(),
+    dateOfBirth: dateInput,
+    gender,
+    personalEmail,
     managerId: objectId.nullable(),
     employmentType: z.enum(EMPLOYMENT_TYPES),
     attendanceMode: z.enum(['OFFICE', 'FIELD', 'REMOTE']),
@@ -96,7 +110,13 @@ const adminPatchBody = z
   .strict();
 
 const selfPatchBody = z
-  .object({ phone, address, emergencyContacts, profileImage: z.string().url().max(500) })
+  .object({
+    phone,
+    personalEmail,
+    address,
+    emergencyContacts,
+    profileImage: z.string().url().max(500),
+  })
   .partial()
   .strict();
 const patchDoc = z.union([adminPatchBody, selfPatchBody]);
@@ -256,6 +276,7 @@ export function registerEmployeeRoutes(v1: Router, env: Env): void {
         ctx.tenantId,
         body as {
           departmentId?: string | null;
+          designationId?: string | null;
           managerId?: string | null;
           workLocationIds?: string[];
         },
@@ -274,6 +295,19 @@ export function registerEmployeeRoutes(v1: Router, env: Env): void {
           from: String(before.departmentId ?? ''),
           to: String(body.departmentId ?? ''),
         });
+      if (
+        'designationId' in body &&
+        String(before.designationId ?? '') !== String(body.designationId ?? '')
+      ) {
+        const title = await svc.designationTitle(ctx.tenantId, body.designationId);
+        if (title) body.designation = title;
+        history.push({
+          ...base,
+          type: 'DESIGNATION_CHANGE',
+          from: String(before.designation ?? ''),
+          to: title ?? '',
+        });
+      }
       if ('managerId' in body && String(before.managerId ?? '') !== String(body.managerId ?? ''))
         history.push({
           ...base,

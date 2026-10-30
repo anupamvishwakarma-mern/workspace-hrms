@@ -1,7 +1,9 @@
 'use client';
 import { useState } from 'react';
+import { PageTop } from '@/components/page-top';
+import { DonutChart, Panel } from '../dashboard/charts';
 import { Pager } from '@/components/pager';
-import { Alert, Empty, PageHeader, Skeleton, Table, Td, Th } from '@/components/ui/display';
+import { Alert, Empty, Skeleton, Table, Td, Th } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/form';
 import { useList } from '@/hooks/api';
 import { userMessage } from '@/lib/errors';
@@ -32,10 +34,32 @@ export default function AuditPage() {
     };
   return (
     <>
-      <PageHeader
+      <PageTop
+        scope="read only"
+        stats={[
+          { label: 'Entries found', value: q.data?.meta?.total ?? '…' },
+          { label: 'Shown', value: q.data?.data.length ?? '…', sub: 'On this page' },
+        ]}
+        guide={[
+          'Every change and export is recorded with who did it and when.',
+          'Filter by action (for example employee.deactivate) or by date range.',
+          'Passwords, tokens and coordinates are never stored here.',
+        ]}
         title="Audit log"
         description="Who changed what, newest first. Passwords, tokens and coordinates are never recorded."
       />
+      {q.data && q.data.data.length > 0 ? (
+        <Panel title="What changed" sub="By area, on this page" className="mb-5">
+          <DonutChart
+            data={Object.entries(
+              q.data.data.reduce<Record<string, number>>((m, e) => {
+                const k = e.action.split('.')[0] ?? 'other';
+                return { ...m, [k]: (m[k] ?? 0) + 1 };
+              }, {}),
+            ).map(([name, value]) => ({ name, value }))}
+          />
+        </Panel>
+      ) : null}
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Action">
           {(id) => (

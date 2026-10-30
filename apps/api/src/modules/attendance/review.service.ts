@@ -38,13 +38,31 @@ export async function assertCanReview(
     (item.requestedBy && String(item.requestedBy) === String(actorUserId));
   if (own && !(tenant.settings.attendance.allowSelfApproval && all))
     throw AppError.forbidden('You cannot review your own request');
-  if (!all) {
-    const emp = await Employee.findOne({ _id: item.employeeId, tenantId: ctx.tenantId })
-      .select('managerId')
-      .lean();
-    if (!emp || !ctx.employeeId || String(emp.managerId) !== String(ctx.employeeId))
-      throw AppError.notFound(); // out of scope: do not reveal
-  }
+  if (!(await isApproverFor(ctx, item.employeeId))) throw AppError.notFound(); // out of scope: do not reveal
+}
+
+/**
+ * Approval rule: an employee's requests are decided by their manager. When the employee has no
+ * manager, the company owner decides. HR and other roles do not approve on someone else's behalf.
+ */
+export async function isApproverFor(ctx: Ctx, employeeId: Types.ObjectId | string): Promise<boolean> {
+  if (!ctx.employeeId && !ctx.roles.includes('COMPANY_OWNER')) return false;
+  const emp = await Employee.findOne({ _id: employeeId, tenantId: ctx.tenantId })
+    .select('managerId')
+    .lean();
+  if (!emp) return false;
+  if (emp.managerId) return !!ctx.employeeId && String(emp.managerId) === String(ctx.employeeId);
+  return ctx.roles.includes('COMPANY_OWNER');
+}
+
+/** Employees whose requests this person decides: direct reports, plus unmanaged people for the owner. */
+export async function approvalScope(ctx: Ctx): Promise<Types.ObjectId[]> {
+  const or: Record<string, unknown>[] = [];
+  if (ctx.employeeId) or.push({ managerId: ctx.employeeId });
+  if (ctx.roles.includes('COMPANY_OWNER')) or.push({ managerId: null });
+  if (or.length === 0) return [];
+  const rows = await Employee.find({ tenantId: ctx.tenantId, $or: or }).select('_id').lean();
+  return rows.map((r) => r._id);
 }
 
 /** Employee ids a reviewer/reader may see: undefined = everyone in the tenant. */

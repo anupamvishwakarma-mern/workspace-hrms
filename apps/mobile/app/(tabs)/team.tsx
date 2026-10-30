@@ -8,6 +8,8 @@ import type { Key } from '@/i18n';
 import { canSeeTeam, seesEveryone } from '@/lib/roles';
 import type { TeamMember } from '@/lib/schemas';
 import { useT } from '@/prefs';
+import PeopleSummary from '@/views/PeopleSummary';
+import { useView } from '@/workspace';
 import { useTheme } from '@/theme';
 
 type Status = TeamMember['status'];
@@ -27,7 +29,13 @@ const TONE: Record<Status, 'success' | 'warn' | 'neutral' | 'info' | 'danger'> =
   NOT_IN: 'danger',
 };
 
+/** Team: a manager's reports today; owners and HR also see headcount and movement above the list. */
 export default function Team() {
+  const { base } = useView();
+  return <TeamList summary={base === 'owner' || base === 'hr'} />;
+}
+
+function TeamList({ summary }: { summary: boolean }) {
   const t = useTheme();
   const tr = useT();
   const { active } = useAuth();
@@ -52,6 +60,7 @@ export default function Team() {
         title={tr('team.title')}
         subtitle={tr(seesEveryone(active?.roles) ? 'team.subtitleAll' : 'team.subtitleManager')}
       />
+      {summary ? <PeopleSummary /> : null}
       <QueryGate q={q}>
         {(data) => (
           <>

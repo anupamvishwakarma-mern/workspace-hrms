@@ -428,11 +428,16 @@ describe('GPS exception workflow', () => {
       exceptionReason: 'Working from cafe today',
     });
     expect(
-      (await post('hr', `/attendance/exceptions/${ex.body.data.exception.id}/reject`, {})).status,
+      (await post('manager', `/attendance/exceptions/${ex.body.data.exception.id}/reject`, {}))
+        .status,
     ).toBe(422);
-    const rej = await post('hr', `/attendance/exceptions/${ex.body.data.exception.id}/reject`, {
-      comment: 'Not a valid location',
-    });
+    const rej = await post(
+      'manager',
+      `/attendance/exceptions/${ex.body.data.exception.id}/reject`,
+      {
+        comment: 'Not a valid location',
+      },
+    );
     expect(rej.status).toBe(200);
     expect(rej.body.data.event).toBeNull();
     expect(
@@ -452,7 +457,10 @@ describe('GPS exception workflow', () => {
     });
     at(TUE, '10:40');
     await punch('employee', 'check-in', { location: inside() }); // legitimate punch arrives first
-    const res = await post('hr', `/attendance/exceptions/${ex.body.data.exception.id}/approve`);
+    const res = await post(
+      'manager',
+      `/attendance/exceptions/${ex.body.data.exception.id}/approve`,
+    );
     expect(res.status).toBe(409);
     await punch('employee', 'check-out');
   });

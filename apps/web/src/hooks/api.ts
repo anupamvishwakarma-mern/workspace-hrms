@@ -30,6 +30,22 @@ export function useOne<T>(name: string, path: string, enabled = true) {
   });
 }
 
+/** A single object fetched with query parameters (useOne has none; useList expects an array). */
+export function useData<T>(
+  name: string,
+  path: string,
+  query: Record<string, unknown> = {},
+  enabled = true,
+) {
+  const tenant = useAuth().active?.tenantId ?? 'none';
+  return useQuery<Envelope<T>>({
+    queryKey: [name, tenant, path, query],
+    queryFn: ({ signal }) => api.get<T>(path, query, signal),
+    enabled: enabled && tenant !== 'none',
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** Mutation that invalidates the given query groups and exposes a user-safe error string. */
 export function useSave<V, R = unknown>(
   fn: (v: V) => Promise<R>,
