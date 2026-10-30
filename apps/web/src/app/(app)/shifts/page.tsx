@@ -25,6 +25,7 @@ const n = (max: number) =>
 const schema = z
   .object({
     name: z.string().trim().min(1, 'Required').max(120),
+    shiftType: z.enum(['FIXED', 'FLEXIBLE']),
     startTime: hhmm,
     endTime: hhmm,
     graceMinutes: n(240),
@@ -112,13 +113,20 @@ export default function ShiftsPage() {
             <tbody>
               {q.data.data.map((s) => (
                 <tr key={s.id}>
-                  <Td className="font-medium">{s.name}</Td>
+                  <Td className="font-medium">
+                    {s.name}
+                    {s.shiftType === 'FLEXIBLE' ? (
+                      <span className="ml-2 text-xs font-normal text-muted">Flexible</span>
+                    ) : null}
+                  </Td>
                   <Td>
                     {s.startTime}–{s.endTime}
                     {s.overnight ? ' (overnight)' : ''}
                   </Td>
                   <Td>
-                    {s.graceMinutes}m late · {s.earlyDepartureGraceMinutes}m early
+                    {s.shiftType === 'FLEXIBLE'
+                      ? 'No late marks'
+                      : `${s.graceMinutes}m late · ${s.earlyDepartureGraceMinutes}m early`}
                   </Td>
                   <Td>
                     {s.minFullDayMinutes ?? '—'} / {s.minHalfDayMinutes ?? '—'} min
@@ -162,6 +170,7 @@ function ShiftForm({ shift, onClose }: { shift?: Shift; onClose: () => void }) {
     resolver: zodResolver(schema),
     defaultValues: {
       name: shift?.name ?? '',
+      shiftType: shift?.shiftType ?? 'FIXED',
       startTime: shift?.startTime ?? '09:00',
       endTime: shift?.endTime ?? '18:00',
       graceMinutes: shift?.graceMinutes ?? 10,
@@ -179,6 +188,7 @@ function ShiftForm({ shift, onClose }: { shift?: Shift; onClose: () => void }) {
     (v: Out) => {
       const body = {
         name: v.name,
+        shiftType: v.shiftType,
         startTime: v.startTime,
         endTime: v.endTime,
         graceMinutes: v.graceMinutes,
@@ -221,6 +231,17 @@ function ShiftForm({ shift, onClose }: { shift?: Shift; onClose: () => void }) {
         {save.error ? <Alert tone="danger">{save.error}</Alert> : null}
         <Field label="Name" error={e.name?.message}>
           {(id, inv) => <Input id={id} invalid={inv} {...f.register('name')} />}
+        </Field>
+        <Field
+          label="Shift type"
+          hint="Fixed: arriving after the start time is marked late. Flexible: nobody is marked late or early; the day counts by hours worked, so set the full-day minutes below."
+        >
+          {(id) => (
+            <Select id={id} {...f.register('shiftType')}>
+              <option value="FIXED">Fixed hours</option>
+              <option value="FLEXIBLE">Flexible hours</option>
+            </Select>
+          )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Start (HH:mm)" error={e.startTime?.message}>

@@ -114,7 +114,8 @@ const serPayslip = (p: Record<string, unknown> & { _id: unknown }, full = true) 
   netMinor: p.netMinor,
   warnings: p.warnings,
   publishedAt: p.publishedAt,
-  ...(full ? { attendance: p.attendance, lines: p.lines } : {}),
+  employerMinor: p.employerMinor ?? 0,
+  ...(full ? { attendance: p.attendance, lines: p.lines, employerLines: p.employerLines ?? [] } : {}),
 });
 
 export function registerPayrollRoutes(v1: Router, env: Env, deps: { clock: Clock }): void {

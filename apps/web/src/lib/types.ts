@@ -51,6 +51,7 @@ export interface Department {
 export interface Shift {
   id: string;
   name: string;
+  shiftType?: 'FIXED' | 'FLEXIBLE';
   startTime: string;
   endTime: string;
   overnight: boolean;

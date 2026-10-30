@@ -8,6 +8,7 @@ import type { Clock } from './utils/clock';
 import { registerHolidayRoutes } from './modules/holidays/holidays.routes';
 import { registerHandbookRoutes } from './modules/handbook/handbook.routes';
 import { registerLetterRoutes } from './modules/letters/letters.routes';
+import { registerStatutoryRoutes } from './modules/payroll/statutory.routes';
 import { registerPayrollRoutes } from './modules/payroll/payroll.routes';
 import { registerTeamRoutes } from './modules/team/team.routes';
 import { registerManualAttendanceRoutes } from './modules/attendance/manual.routes';
@@ -56,6 +57,7 @@ export function createV1Router(env: Env, deps: { clock: Clock }): Router {
   registerLeaveLedgerRoutes(v1, env, deps); // before leave routes so /leave/ledger is not read as an id
   registerLeaveRoutes(v1, env, deps);
   registerPayrollRoutes(v1, env, deps);
+  registerStatutoryRoutes(v1, env);
   registerLetterRoutes(v1, env, deps);
   registerHandbookRoutes(v1, env, deps);
   registerTeamRoutes(v1, env, deps);

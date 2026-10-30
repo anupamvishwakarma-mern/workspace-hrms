@@ -7,11 +7,13 @@ import { LeaveRequest } from '../../database/models/leaveRequest.model';
 import { LeaveType } from '../../database/models/leaveType.model';
 import { PayrollRun, Payslip } from '../../database/models/payroll.model';
 import { SalaryStructure } from '../../database/models/salaryStructure.model';
+import { PayrollAdjustment, StatutoryRule } from '../../database/models/statutoryRule.model';
 import { AppError } from '../../utils/errors';
 import { addDays, localDate } from '../attendance/dates';
 import type { TenantInfo } from '../attendance/attendance.service';
 import { ensureDays, type ScopedEmployee } from '../reports/reports.service';
-import { calculatePayslip, type PayComponent } from './calc';
+import { calculatePayslip, type PayComponent, type PayLine } from './calc';
+import { activeRules, evaluateRules, type RuleLike } from './statutory';
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -60,7 +62,7 @@ export async function generateRun(
     tenantId: tenant._id,
     employmentStatus: { $in: ['ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED'] },
   })
-    .select('employeeCode firstName lastName designation departmentId joiningDate lastWorkingDate')
+    .select('employeeCode firstName lastName designation departmentId joiningDate lastWorkingDate workLocationIds')
     .sort({ employeeCode: 1 })
     .lean();
   const employed = emps.filter((e) => {
@@ -120,6 +122,28 @@ export async function generateRun(
     ]),
   );
 
+  const rules = activeRules(
+    (await StatutoryRule.find({
+      tenantId: tenant._id,
+      status: 'ACTIVE',
+      effectiveFrom: { $lte: to },
+    }).lean()) as unknown as RuleLike[],
+    from,
+    to,
+  );
+  const adjustments = await PayrollAdjustment.find({
+    tenantId: tenant._id,
+    month,
+    status: 'ACTIVE',
+  }).lean();
+  for (const a of adjustments)
+    if (!payable.some((e) => String(e._id) === String(a.employeeId)))
+      skipped.push({
+        employeeId: a.employeeId,
+        name: a.label,
+        reason: 'ADJUSTMENT_NOT_APPLIED',
+      });
+
   if (!run)
     run = new PayrollRun({
       tenantId: tenant._id,
@@ -174,7 +198,41 @@ export async function generateRun(
       lopDays: lop,
       notEmployedDays: notEmployed,
     });
-    const warnings = [...calc.warnings];
+    // Lines: salary structure, then one-off adjustments (never prorated), then the company's statutory rules
+    // measured on the earnings actually paid this month.
+    const lines: (PayLine & { source: string })[] = calc.lines.map((l) => ({ ...l, source: 'STRUCTURE' }));
+    for (const a of adjustments.filter((x) => String(x.employeeId) === String(e._id)))
+      lines.push({
+        code: a.code ?? 'ADJ',
+        name: a.label,
+        kind: a.kind as 'EARNING' | 'DEDUCTION',
+        fullMinor: a.amountMinor,
+        amountMinor: a.amountMinor,
+        source: 'ADJUSTMENT',
+      });
+    const statutory = evaluateRules({
+      rules,
+      earnings: lines.filter((l) => l.kind === 'EARNING'),
+      month: Number(month.slice(5, 7)),
+      workLocationIds: (e.workLocationIds ?? []).map(String),
+    });
+    for (const r of statutory.filter((x) => x.party === 'EMPLOYEE'))
+      lines.push({
+        code: `STAT_${r.code}`,
+        name: r.name,
+        kind: 'DEDUCTION',
+        fullMinor: r.amountMinor,
+        amountMinor: r.amountMinor,
+        source: 'STATUTORY',
+      });
+    const employerLines = statutory
+      .filter((x) => x.party === 'EMPLOYER')
+      .map((r) => ({ code: r.code, name: r.name, wageMinor: r.wageMinor, amountMinor: r.amountMinor }));
+    const grossMinor = lines.filter((l) => l.kind === 'EARNING').reduce((s, l) => s + l.amountMinor, 0);
+    const deductionsMinor = lines.filter((l) => l.kind === 'DEDUCTION').reduce((s, l) => s + l.amountMinor, 0);
+    const netMinor = grossMinor - deductionsMinor;
+    const warnings = calc.warnings.filter((w) => w !== 'NEGATIVE_NET');
+    if (netMinor < 0) warnings.push('NEGATIVE_NET');
     const incomplete = count('INCOMPLETE');
     if (incomplete) warnings.push('INCOMPLETE_DAYS');
     return {
@@ -205,10 +263,12 @@ export async function generateRun(
         weeklyOffs: count('WEEKLY_OFF'),
         incompleteDays: incomplete,
       },
-      lines: calc.lines,
-      grossMinor: calc.grossMinor,
-      deductionsMinor: calc.deductionsMinor,
-      netMinor: calc.netMinor,
+      lines,
+      employerLines,
+      employerMinor: employerLines.reduce((s, l) => s + l.amountMinor, 0),
+      grossMinor,
+      deductionsMinor,
+      netMinor,
       warnings,
     };
   });
@@ -218,6 +278,7 @@ export async function generateRun(
     grossMinor: docs.reduce((s, d) => s + d.grossMinor, 0),
     deductionsMinor: docs.reduce((s, d) => s + d.deductionsMinor, 0),
     netMinor: docs.reduce((s, d) => s + d.netMinor, 0),
+    employerMinor: docs.reduce((s, d) => s + d.employerMinor, 0),
   };
   run.skipped = skipped as never;
   await run.save();

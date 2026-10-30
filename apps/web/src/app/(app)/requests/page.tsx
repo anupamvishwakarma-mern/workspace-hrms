@@ -22,6 +22,7 @@ export default function RequestsPage() {
   const { can } = useAuth();
   const [scope, setScope] = useState<Scope>('inbox');
   const [raising, setRaising] = useState(false);
+  const [wfh, setWfh] = useState(false);
   const [acting, setActing] = useState<{ r: ApprovalRequest; decision: 'APPROVE' | 'REJECT' }>();
   const q = useList<ApprovalRequest>('approvals', '/approvals', { scope, limit: 50 });
   const items = q.data?.data ?? [];
@@ -43,7 +44,16 @@ export default function RequestsPage() {
           'Approvers can pass their approvals to a colleague while away; that is not in the web app yet.',
         ]}
         title="Requests"
-        actions={<Button onClick={() => setRaising(true)}>New request</Button>}
+        actions={
+          <div className="flex gap-2">
+            {can('wfh:request') ? (
+              <Button variant="secondary" onClick={() => setWfh(true)}>
+                Work from home
+              </Button>
+            ) : null}
+            <Button onClick={() => setRaising(true)}>New request</Button>
+          </div>
+        }
       />
       <TabBar tabs={tabs} value={scope} onChange={setScope} label="Request lists" />
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
@@ -113,6 +123,7 @@ export default function RequestsPage() {
         </ul>
       )}
       {raising ? <RaiseForm onClose={() => setRaising(false)} /> : null}
+      {wfh ? <WfhForm onClose={() => setWfh(false)} /> : null}
       {acting ? <DecideForm {...acting} onClose={() => setActing(undefined)} /> : null}
     </>
   );
@@ -210,6 +221,59 @@ function DecideForm({
           </Button>
           <Button type="submit" loading={save.isPending}>
             {decision === 'APPROVE' ? 'Approve' : 'Reject'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+const wfhSchema = z
+  .object({
+    startDate: z.string().min(1, 'Required'),
+    endDate: z.string().min(1, 'Required'),
+    reason: z.string().trim().max(1000),
+  })
+  .refine((v) => v.endDate >= v.startDate, { path: ['endDate'], message: 'Cannot be before the start date' });
+
+function WfhForm({ onClose }: { onClose: () => void }) {
+  const f = useForm<z.infer<typeof wfhSchema>>({
+    resolver: zodResolver(wfhSchema),
+    defaultValues: { startDate: '', endDate: '', reason: '' },
+  });
+  const save = useSave(
+    (v: z.infer<typeof wfhSchema>) =>
+      api.post('/wfh/requests', { startDate: v.startDate, endDate: v.endDate, ...(v.reason ? { reason: v.reason } : {}) }),
+    KEYS,
+    onClose,
+  );
+  const e = f.formState.errors;
+  return (
+    <Modal
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Work from home"
+      description="Once approved, you can punch in and out on these days without being at the office location. It is decided by your manager (or the owner if you have none) unless your company set up a different chain."
+    >
+      <form onSubmit={f.handleSubmit((v) => save.mutate(v))} className="space-y-3" noValidate>
+        {save.error ? <Alert tone="danger">{save.error}</Alert> : null}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="From" error={e.startDate?.message}>
+            {(id, inv) => <Input id={id} type="date" invalid={inv} {...f.register('startDate')} />}
+          </Field>
+          <Field label="To" error={e.endDate?.message}>
+            {(id, inv) => <Input id={id} type="date" invalid={inv} {...f.register('endDate')} />}
+          </Field>
+        </div>
+        <Field label="Reason (optional)" error={e.reason?.message}>
+          {(id) => <Textarea id={id} rows={3} {...f.register('reason')} />}
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={save.isPending}>
+            Submit
           </Button>
         </div>
       </form>

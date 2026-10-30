@@ -26,7 +26,16 @@ Last updated: 2026-10-30. Plan and gap analysis: [HRMS_AUDIT.md](HRMS_AUDIT.md).
   - **Manual attendance:** `POST /attendance/manual` (new permission `attendance:manual`, HR/owner). Reason required, never for your own record. Stored as an already-approved correction marked `HR_MANUAL`, so original punches stay untouched and the existing calculator applies it; entries that clash with real punches are refused and leave nothing pending. Audited. (The correction review code was split so the apply step is shared; behaviour of normal reviews is unchanged.)
   - **Shift types:** `shiftType` FIXED (default, unchanged) or FLEXIBLE (no late or early-departure marks; the day counts by hours, so `minFullDayMinutes` is required). Overnight/night shifts already worked and are reported as `overnight`. Rotational patterns are still done with dated shift assignments; there is no rotation generator.
   - **Work from home:** `POST/GET /wfh/requests`, `POST /wfh/requests/:id/cancel` (permission `wfh:request`, all roles). Decided through the approval engine: if the company has no active `WFH` workflow, a one-step "manager (owner if none)" workflow is created automatically and HR can edit it under Approval workflows. While a request is APPROVED, an office employee's punches on those days use remote rules (no office location needed); field and remote staff are unaffected. Approved days that have started cannot be withdrawn. There is no web screen yet; approvers decide under `/requests`.
-  - Tests: `phase4-attendance.test.ts` (15, **not yet run**); DB-free suites pass in cloud (calculation, geo).
+  - Tests: `phase4-attendance.test.ts` (11). API suite last run: 364 passed, 2 skipped.
+- **Phase 4, increment 4 (web for the above):** shift form has a type (fixed/flexible) and the table labels flexible shifts; Requests page has a "Work from home" button and form (approvers decide under Requests); the existing HR "Add manual entry" dialog now uses the direct manual endpoint (takes effect immediately, recorded as HR_MANUAL) instead of filing a correction for someone else to approve. Web checked in cloud: `tsc` clean, 19/19 unit tests, `next build`. **Not tried in a browser.**
+
+- **Phase 5, increment 1 (payroll: statutory rules, adjustments, employer lines; API only).** Audit of what already existed: salary structures, LOP proration from attendance, draft/publish runs and payslips. Added:
+  - **Statutory rules** (`/payroll/statutory-rules`, permission `payroll:manage`): company-configured, effective-dated, versioned per code. Methods PERCENT (with wage ceiling and cap), SLAB, FIXED; party EMPLOYEE (deducted) or EMPLOYER (shown on the payslip, never deducted). **No rates ship with the product.** The company enters figures and records its source in `reference`.
+  - **Adjustments** (`/payroll/adjustments`): one-off earning or deduction lines per person per month, reason required, voidable, frozen once the month is published (409).
+  - Payroll generation applies structure lines, then adjustments (not prorated), then statutory deductions measured on earnings paid that month; payslips gain `employerLines` and `employerMinor`. Adjustments for people who are not payable that month are reported as skipped.
+  - **Not built:** income tax (TDS) calculation. Record it as a manual deduction adjustment. No claim of legal compliance: rule figures must be checked by a qualified professional.
+  - Tests: `statutory-calc.test.ts` (11, pass in cloud), `payroll-statutory.test.ts` (7, **not yet run**; all figures are made-up examples).
+  - **Still to do in Phase 5:** maker-checker publishing, payslip PDF, web screens (rules, adjustments, employer lines), F&F groundwork (Phase 8).
 
 ## Verification status
 
@@ -62,7 +71,7 @@ Phase 2 remainder
 
 Phase 3: approval engine first (workflows, requests, actions, self-approval and cycle prevention, escalation, delegation), then recruitment and onboarding.
 Phase 4: leave policies/accrual/ledger/multi-level approval, shift types, WFH, manual attendance.
-Phase 5: statutory rules (effective-dated config), adjustments, maker-checker payroll, payslip PDF, F&F groundwork.
+Phase 5: [x] statutory rules and adjustments (API); [ ] maker-checker payroll; [ ] payslip PDF; [ ] web screens; [ ] F&F groundwork.
 Phase 6-10: as in the audit.
 
 ## Honest limits

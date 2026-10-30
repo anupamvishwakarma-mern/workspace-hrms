@@ -18,6 +18,8 @@ const payrollRunSchema = new Schema(
       grossMinor: { type: Number, default: 0 },
       deductionsMinor: { type: Number, default: 0 },
       netMinor: { type: Number, default: 0 },
+      /** Employer-side statutory contributions: a company cost, not part of net pay. */
+      employerMinor: { type: Number, default: 0 },
     },
     skipped: {
       type: [{ employeeId: Schema.Types.ObjectId, name: String, reason: String, _id: false }],
@@ -67,11 +69,18 @@ const payslipSchema = new Schema(
           kind: { type: String, enum: COMPONENT_KINDS },
           fullMinor: Number, // the full-month amount
           amountMinor: Number, // what is actually paid/deducted this month
+          source: { type: String, enum: ['STRUCTURE', 'ADJUSTMENT', 'STATUTORY'], default: 'STRUCTURE' },
           _id: false,
         },
       ],
       default: [],
     },
+    /** Employer contributions computed from the company's statutory rules (not deducted from the employee). */
+    employerLines: {
+      type: [{ code: String, name: String, wageMinor: Number, amountMinor: Number, _id: false }],
+      default: [],
+    },
+    employerMinor: { type: Number, default: 0 },
     grossMinor: { type: Number, required: true },
     deductionsMinor: { type: Number, required: true },
     netMinor: { type: Number, required: true },

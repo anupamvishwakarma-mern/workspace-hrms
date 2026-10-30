@@ -155,12 +155,12 @@ export function ManualEntryModal({
   );
   const save = useSave(
     () =>
-      api.post('/attendance/corrections', {
+      api.post('/attendance/manual', {
         employeeId: empId,
         workDate: date,
         ...(pin ? { checkIn: at(date, pin, tz) } : {}),
         ...(pout ? { checkOut: at(date, pout, tz, !!pin && pout <= pin) } : {}),
-        reason: `[Manual entry by HR] ${reason.trim()}`,
+        reason: reason.trim(),
       }),
     ['approvals', 'exception-days', 'team-days', 'register'],
     onClose,
@@ -179,7 +179,7 @@ export function ManualEntryModal({
       open
       onOpenChange={(o) => !o && onClose()}
       title="Add manual entry"
-      description="Creates a correction for the employee. Original punches are never edited, and another approver reviews it."
+      description="Takes effect immediately and is recorded as a manual entry by you, with your reason. Original punches are never edited. You cannot do this for your own record."
     >
       <form onSubmit={submit} className="space-y-3" noValidate>
         {preset ? (
