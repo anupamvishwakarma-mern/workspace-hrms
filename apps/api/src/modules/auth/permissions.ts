@@ -31,6 +31,7 @@ export type Permission =
   | 'holiday:read'
   | 'holiday:manage'
   | 'employee:reactivate'
+  | 'employee:confirm' // confirm an employee after probation
   | 'audit:read'
   | 'leave:apply' // own requests and balances
   | 'leave:read:all'
@@ -82,6 +83,7 @@ const HR_PERMS: Permission[] = [
   'location:manage',
   'holiday:manage',
   'employee:reactivate',
+  'employee:confirm',
   'audit:read',
   'leave:read:all',
   'leave:review:all',

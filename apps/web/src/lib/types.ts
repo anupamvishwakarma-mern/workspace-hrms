@@ -20,12 +20,27 @@ export interface Employee {
   departmentId?: string;
   managerId?: string;
   designation?: string;
+  designationId?: string;
+  probationStatus?: string;
+  probationEndDate?: string;
+  confirmationDate?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  personalEmail?: string;
   employmentStatus: string;
   employmentType?: string;
   attendanceMode?: string;
   workLocationIds?: string[];
   joiningDate?: string;
   lastWorkingDate?: string;
+}
+export interface Designation {
+  id: string;
+  title: string;
+  code?: string;
+  level?: number;
+  description?: string;
+  status: string;
 }
 export interface Department {
   id: string;
@@ -436,7 +451,13 @@ export interface LeaveOverview {
     highUnused: number;
     peakOff: { off: number; headcount: number; pct: number };
   }[];
-  coverage: { department: string; weekStart: string; off: number; headcount: number; pct: number }[];
+  coverage: {
+    department: string;
+    weekStart: string;
+    off: number;
+    headcount: number;
+    pct: number;
+  }[];
   liability: { unusedDays: number; paidUnusedDays: number; avgUnusedPerPerson: number };
   attention: {
     highUnused: { days: number; count: number };
@@ -445,5 +466,12 @@ export interface LeaveOverview {
     negativeBalances: number;
     crowdedTeams: { pct: number; names: string[] };
   };
-  policy: { id: string; name: string; code: string; paid: boolean; annualAllowanceDays: number; allowHalfDay: boolean }[];
+  policy: {
+    id: string;
+    name: string;
+    code: string;
+    paid: boolean;
+    annualAllowanceDays: number;
+    allowHalfDay: boolean;
+  }[];
 }

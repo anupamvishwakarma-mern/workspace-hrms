@@ -114,8 +114,8 @@ export function DonutChart({
               strokeWidth={2}
               isAnimationActive={false}
             >
-              {rows.map((r) => (
-                <Cell key={r.name} fill={r.color} />
+              {rows.map((r, i) => (
+                <Cell key={i} fill={r.color} />
               ))}
             </Pie>
             <Tooltip contentStyle={tip} />
@@ -129,8 +129,8 @@ export function DonutChart({
         ) : null}
       </div>
       <ul className="min-w-40 flex-1 space-y-1.5 text-sm">
-        {rows.map((r) => (
-          <li key={r.name} className="flex items-center gap-2">
+        {rows.map((r, i) => (
+          <li key={i} className="flex items-center gap-2">
             <span
               aria-hidden
               className="size-2.5 shrink-0 rounded-full"

@@ -19,7 +19,7 @@ const body = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeAll(async () => {
-  ({ app } = await startTestApp());
+  ({ app } = await startTestApp({ RATE_LIMIT_SIGNUP_MAX: '10000' })); // this file makes more than 5 signup calls
 });
 afterAll(stopTestApp);
 

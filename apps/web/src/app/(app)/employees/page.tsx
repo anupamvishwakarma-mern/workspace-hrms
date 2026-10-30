@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/display';
 import { Field, Input, Select, Textarea } from '@/components/ui/form';
 import { useList, useSave } from '@/hooks/api';
-import { useDepartments } from '@/hooks/lookups';
+import { useDepartments, useDesignations } from '@/hooks/lookups';
 import { api } from '@/lib/api';
 import { userMessage } from '@/lib/errors';
 import { ROLES, type Employee, type EmployeeDocument, type WorkLocation } from '@/lib/types';
@@ -227,6 +227,7 @@ const createSchema = z.object({
     .trim()
     .refine((s) => s === '' || /^[0-9+()\-\s]{5,30}$/.test(s), 'Invalid phone number'),
   designation: z.string().max(120),
+  designationId: z.string(),
   departmentId: z.string(),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']),
   attendanceMode: z.enum(['OFFICE', 'FIELD', 'REMOTE']),
@@ -234,6 +235,31 @@ const createSchema = z.object({
   joiningDate: z.string(),
 });
 type CForm = z.infer<typeof createSchema>;
+
+/** A picker over the company's designations; falls back to free text when none have been defined yet. */
+function DesignationField({
+  register,
+}: {
+  register: (name: 'designationId' | 'designation') => object;
+}) {
+  const list = useDesignations();
+  return list.items.length > 0 ? (
+    <Field label="Designation">
+      {(id) => (
+        <Select id={id} {...register('designationId')}>
+          <option value="">None</option>
+          {list.items.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.title}
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
+  ) : (
+    <Field label="Designation">{(id) => <Input id={id} {...register('designation')} />}</Field>
+  );
+}
 
 function CreateForm({ onClose }: { onClose: () => void }) {
   const depts = useDepartments();
@@ -247,6 +273,7 @@ function CreateForm({ onClose }: { onClose: () => void }) {
       employeeCode: '',
       phone: '',
       designation: '',
+      designationId: '',
       departmentId: '',
       employmentType: 'FULL_TIME',
       attendanceMode: 'OFFICE',
@@ -256,9 +283,11 @@ function CreateForm({ onClose }: { onClose: () => void }) {
   });
   const save = useSave(
     (v: CForm) => {
-      const { workLocationId, ...rest } = v;
+      const { workLocationId, designation, designationId, ...rest } = v;
       return api.post('/employees', {
         ...compact(rest),
+        // A chosen designation wins; the server copies its title. Free text is only for companies with no list yet.
+        ...(designationId ? { designationId } : designation ? { designation } : {}),
         ...(workLocationId ? { workLocationIds: [workLocationId] } : {}),
       });
     },
@@ -290,7 +319,7 @@ function CreateForm({ onClose }: { onClose: () => void }) {
           {t('phone', 'Phone (optional)')}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {t('designation', 'Designation')}
+          <DesignationField register={f.register} />
           {t('joiningDate', 'Joining date', 'date')}
           <Field label="Department">
             {(id) => (
@@ -354,11 +383,14 @@ function CreateForm({ onClose }: { onClose: () => void }) {
 
 function Manage({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   const { can } = useAuth();
-  const [tab, setTab] = useState<'details' | 'access' | 'documents' | 'offboard'>('details');
+  const [tab, setTab] = useState<'details' | 'access' | 'documents' | 'probation' | 'offboard'>(
+    'details',
+  );
   const tabs = [
     ['details', true],
     ['access', can('employee:invite') || can('employee:roles')],
     ['documents', can('document:manage')],
+    ['probation', can('employee:update', 'employee:confirm')],
     ['offboard', can('employee:deactivate', 'employee:update', 'employee:reactivate')],
   ] as const;
   return (
@@ -377,6 +409,7 @@ function Manage({ emp, onClose }: { emp: Employee; onClose: () => void }) {
       {tab === 'details' ? <Details emp={emp} onClose={onClose} /> : null}
       {tab === 'access' ? <Access emp={emp} /> : null}
       {tab === 'documents' ? <Documents emp={emp} /> : null}
+      {tab === 'probation' ? <Probation emp={emp} onClose={onClose} /> : null}
       {tab === 'offboard' ? <Offboard emp={emp} onClose={onClose} /> : null}
     </Modal>
   );
@@ -390,6 +423,13 @@ const editSchema = z.object({
     .trim()
     .refine((s) => s === '' || /^[0-9+()\-\s]{5,30}$/.test(s), 'Invalid phone number'),
   designation: z.string().max(120),
+  designationId: z.string(),
+  dateOfBirth: z.string(),
+  gender: z.string(),
+  personalEmail: z
+    .string()
+    .trim()
+    .refine((s) => s === '' || z.string().email().safeParse(s).success, 'Enter a valid email'),
   departmentId: z.string(),
   managerId: z.string(),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']),
@@ -412,6 +452,10 @@ function Details({ emp, onClose }: { emp: Employee; onClose: () => void }) {
       lastName: emp.lastName,
       phone: emp.phone ?? '',
       designation: emp.designation ?? '',
+      designationId: emp.designationId ?? '',
+      dateOfBirth: emp.dateOfBirth?.slice(0, 10) ?? '',
+      gender: emp.gender ?? '',
+      personalEmail: emp.personalEmail ?? '',
       departmentId: emp.departmentId ?? '',
       managerId: emp.managerId ?? '',
       employmentType: (emp.employmentType as EForm['employmentType']) ?? 'FULL_TIME',
@@ -424,7 +468,12 @@ function Details({ emp, onClose }: { emp: Employee; onClose: () => void }) {
       api.patch(`/employees/${emp.id}`, {
         firstName: v.firstName,
         lastName: v.lastName,
-        designation: v.designation,
+        ...(v.designationId
+          ? { designationId: v.designationId }
+          : { designation: v.designation, ...(emp.designationId ? { designationId: null } : {}) }),
+        ...(v.dateOfBirth ? { dateOfBirth: v.dateOfBirth } : {}),
+        ...(v.gender ? { gender: v.gender } : {}),
+        ...(v.personalEmail ? { personalEmail: v.personalEmail } : {}),
         employmentType: v.employmentType,
         attendanceMode: v.attendanceMode,
         ...(v.phone ? { phone: v.phone } : {}),
@@ -449,8 +498,26 @@ function Details({ emp, onClose }: { emp: Employee; onClose: () => void }) {
         <Field label="Phone" error={e.phone?.message}>
           {(id, inv) => <Input id={id} invalid={inv} {...f.register('phone')} />}
         </Field>
-        <Field label="Designation">
-          {(id) => <Input id={id} {...f.register('designation')} />}
+        <DesignationField register={f.register} />
+        <Field label="Date of birth">
+          {(id) => <Input id={id} type="date" {...f.register('dateOfBirth')} />}
+        </Field>
+        <Field label="Gender">
+          {(id) => (
+            <Select id={id} {...f.register('gender')}>
+              <option value="">Not set</option>
+              {['MALE', 'FEMALE', 'OTHER', 'UNDISCLOSED'].map((g) => (
+                <option key={g} value={g}>
+                  {label(g)}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="Personal email" error={e.personalEmail?.message}>
+          {(id, inv) => (
+            <Input id={id} type="email" invalid={inv} {...f.register('personalEmail')} />
+          )}
         </Field>
         <Field label="Department">
           {(id) => (
@@ -646,6 +713,99 @@ function Offboard({ emp, onClose }: { emp: Employee; onClose: () => void }) {
 }
 
 const LIFECYCLE_INVALIDATE = ['employees', 'employees-lookup', 'dashboard', 'days', 'audit'];
+
+function Probation({ emp, onClose }: { emp: Employee; onClose: () => void }) {
+  const { can } = useAuth();
+  const on = emp.probationStatus === 'ON_PROBATION';
+  const done = emp.probationStatus === 'CONFIRMED';
+  const ended = emp.employmentStatus === 'TERMINATED';
+  const [end, setEnd] = useState(emp.probationEndDate?.slice(0, 10) ?? '');
+  const [reason, setReason] = useState('');
+  const [comment, setComment] = useState('');
+  const set = useSave(
+    () =>
+      api.post(`/employees/${emp.id}/probation`, {
+        endDate: end,
+        ...(reason.trim() ? { reason: reason.trim() } : {}),
+      }),
+    LIFECYCLE_INVALIDATE,
+    onClose,
+  );
+  const confirm = useSave(
+    () =>
+      api.post(`/employees/${emp.id}/confirm`, comment.trim() ? { comment: comment.trim() } : {}),
+    LIFECYCLE_INVALIDATE,
+    onClose,
+  );
+  return (
+    <div className="space-y-6">
+      <p className="text-sm">
+        Status:{' '}
+        <Badge tone={done ? 'success' : on ? 'warn' : 'neutral'}>
+          {done ? 'Confirmed' : on ? 'On probation' : 'Not tracked'}
+        </Badge>
+        {on && emp.probationEndDate ? ` · ends ${emp.probationEndDate.slice(0, 10)}` : ''}
+        {done && emp.confirmationDate ? ` · confirmed ${emp.confirmationDate.slice(0, 10)}` : ''}
+      </p>
+      {!done && !ended && can('employee:update') ? (
+        <section className="space-y-3" aria-label="Probation period">
+          <h3 className="text-sm font-semibold">{on ? 'Extend probation' : 'Start probation'}</h3>
+          {set.error ? <Alert tone="danger">{set.error}</Alert> : null}
+          <Field label="Probation ends">
+            {(id) => (
+              <Input id={id} type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
+            )}
+          </Field>
+          {on ? (
+            <Field label="Reason for extending (required)">
+              {(id) => (
+                <Input
+                  id={id}
+                  maxLength={500}
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              )}
+            </Field>
+          ) : null}
+          <div className="flex justify-end">
+            <Button
+              disabled={!end || (on && reason.trim().length < 3)}
+              loading={set.isPending}
+              onClick={() => set.mutate(undefined)}
+            >
+              {on ? 'Extend probation' : 'Start probation'}
+            </Button>
+          </div>
+        </section>
+      ) : null}
+      {on && !ended && can('employee:confirm') ? (
+        <section className="space-y-3" aria-label="Confirm employee">
+          <h3 className="text-sm font-semibold">Confirm employment</h3>
+          <p className="text-xs text-muted">
+            Records the confirmation in the employee history. You cannot confirm your own record.
+          </p>
+          {confirm.error ? <Alert tone="danger">{confirm.error}</Alert> : null}
+          <Field label="Comment (optional)">
+            {(id) => (
+              <Input
+                id={id}
+                maxLength={500}
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+              />
+            )}
+          </Field>
+          <div className="flex justify-end">
+            <Button loading={confirm.isPending} onClick={() => confirm.mutate(undefined)}>
+              Confirm employee
+            </Button>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
 
 function Notice({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   const [start, setStart] = useState('');

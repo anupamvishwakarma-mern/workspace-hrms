@@ -9,6 +9,8 @@ export const EMPLOYMENT_STATUSES = [
   'TERMINATED',
 ] as const;
 export type EmploymentStatus = (typeof EMPLOYMENT_STATUSES)[number];
+/** Probation is tracked separately from employment status so ACTIVE people stay ACTIVE for attendance, leave and payroll. */
+export const PROBATION_STATUSES = ['ON_PROBATION', 'CONFIRMED'] as const;
 export const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'] as const;
 
 const employeeSchema = new Schema(
@@ -33,6 +35,8 @@ const employeeSchema = new Schema(
     // OFFICE = geofence rules apply; FIELD = good GPS fix required, no fence; REMOTE = location optional.
     attendanceMode: { type: String, enum: ['OFFICE', 'FIELD', 'REMOTE'], default: 'OFFICE' },
     joiningDate: { type: Date },
+    probationStatus: { type: String, enum: PROBATION_STATUSES },
+    probationEndDate: { type: Date },
     confirmationDate: { type: Date },
     noticePeriodStartDate: { type: Date },
     lastWorkingDate: { type: Date },
@@ -71,6 +75,7 @@ employeeSchema.index({ tenantId: 1, workEmail: 1 }, { unique: true });
 employeeSchema.index({ tenantId: 1, managerId: 1 });
 employeeSchema.index({ tenantId: 1, departmentId: 1 });
 employeeSchema.index({ tenantId: 1, employmentStatus: 1 });
+employeeSchema.index({ tenantId: 1, probationStatus: 1, probationEndDate: 1 });
 
 export type EmployeeDoc = InferSchemaType<typeof employeeSchema>;
 export const Employee = tenantModel('Employee', employeeSchema);

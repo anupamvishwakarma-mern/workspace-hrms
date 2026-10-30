@@ -31,7 +31,16 @@ const BASIC = [
   'employmentStatus',
   'joiningDate',
 ];
-const TEAM = [...BASIC, 'workEmail', 'phone', 'managerId', 'profileImage', 'lastWorkingDate'];
+const TEAM = [
+  ...BASIC,
+  'workEmail',
+  'phone',
+  'managerId',
+  'profileImage',
+  'lastWorkingDate',
+  'probationStatus',
+  'probationEndDate',
+];
 const SELF = [
   ...TEAM,
   'confirmationDate',
@@ -104,6 +113,8 @@ export interface ListParams {
   managerId?: string;
   status?: EmploymentStatus;
   employmentType?: string;
+  probationStatus?: string;
+  probationEndBefore?: Date;
   sort?: string;
 }
 
@@ -114,6 +125,8 @@ export async function listEmployees(ctx: NonNullable<Request['tenantCtx']>, p: L
   if (p.managerId) and.push({ managerId: p.managerId });
   if (p.status) and.push({ employmentStatus: p.status });
   if (p.employmentType) and.push({ employmentType: p.employmentType });
+  if (p.probationStatus) and.push({ probationStatus: p.probationStatus });
+  if (p.probationEndBefore) and.push({ probationEndDate: { $lte: p.probationEndBefore } });
   if (p.search) {
     const rx = new RegExp(escapeRegex(p.search), 'i');
     and.push({
@@ -488,4 +501,94 @@ export async function reactivateEmployee(
   emp.noticePeriodStartDate = undefined;
   await emp.save();
   return emp;
+}
+
+/* ------------------------------ probation ------------------------------ */
+
+/**
+ * Start probation, or extend it (a later end date plus a reason). A confirmed employee cannot go back on probation,
+ * and an ended employee cannot be changed.
+ */
+export async function setProbation(
+  tenantId: Types.ObjectId,
+  actorUserId: Types.ObjectId,
+  employeeId: string,
+  opts: { endDate: Date; reason?: string },
+) {
+  const emp = await Employee.findOne({ _id: employeeId, tenantId });
+  if (!emp) throw AppError.notFound('Employee not found');
+  if (emp.employmentStatus === 'TERMINATED')
+    throw AppError.conflict('Terminated employee records are read-only');
+  if (emp.probationStatus === 'CONFIRMED')
+    throw AppError.conflict('This employee is already confirmed');
+  if (emp.joiningDate && opts.endDate <= emp.joiningDate)
+    throw AppError.badRequest('endDate must be after the joining date');
+  const extending = emp.probationStatus === 'ON_PROBATION';
+  if (extending) {
+    if (!emp.probationEndDate || opts.endDate <= emp.probationEndDate)
+      throw AppError.badRequest('An extension must end after the current probation end date');
+    if (!opts.reason || opts.reason.length < 3)
+      throw AppError.badRequest('A reason is required to extend probation');
+  }
+  emp.history.push({
+    type: extending ? 'PROBATION_EXTENDED' : 'PROBATION_START',
+    from: emp.probationEndDate ? emp.probationEndDate.toISOString().slice(0, 10) : '',
+    to: opts.endDate.toISOString().slice(0, 10),
+    byUserId: actorUserId,
+    reason: opts.reason,
+    at: new Date(),
+  } as never);
+  emp.probationStatus = 'ON_PROBATION';
+  emp.probationEndDate = opts.endDate;
+  await emp.save();
+  return emp;
+}
+
+/**
+ * Confirm an employee who is on probation. The decision is an atomic flip, so two simultaneous confirmations record
+ * one history entry. Nobody confirms their own record, and someone serving notice is not confirmed.
+ */
+export async function confirmEmployee(
+  tenantId: Types.ObjectId,
+  actor: { userId: Types.ObjectId; employeeId?: Types.ObjectId },
+  employeeId: string,
+  opts: { confirmationDate?: Date; comment?: string },
+) {
+  if (actor.employeeId && String(actor.employeeId) === String(employeeId))
+    throw AppError.forbidden('You cannot confirm your own employment');
+  const at = new Date();
+  const existing = await Employee.findOne({ _id: employeeId, tenantId })
+    .select('joiningDate')
+    .lean();
+  if (!existing) throw AppError.notFound('Employee not found');
+  const date = opts.confirmationDate ?? at;
+  if (existing.joiningDate && date < existing.joiningDate)
+    throw AppError.badRequest('confirmationDate is before the joining date');
+  const done = await Employee.findOneAndUpdate(
+    {
+      _id: employeeId,
+      tenantId,
+      probationStatus: 'ON_PROBATION',
+      employmentStatus: { $in: ['ACTIVE', 'ON_LEAVE'] },
+    },
+    {
+      $set: { probationStatus: 'CONFIRMED', confirmationDate: date },
+      $push: {
+        history: {
+          type: 'CONFIRMED',
+          from: 'ON_PROBATION',
+          to: 'CONFIRMED',
+          byUserId: actor.userId,
+          reason: opts.comment,
+          at,
+        },
+      },
+    },
+    { new: true },
+  );
+  if (!done)
+    throw AppError.conflict(
+      'Only an active employee who is on probation can be confirmed (it may already have been confirmed)',
+    );
+  return done;
 }

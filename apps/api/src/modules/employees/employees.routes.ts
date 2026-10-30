@@ -5,6 +5,7 @@ import {
   Employee,
   EMPLOYMENT_STATUSES,
   EMPLOYMENT_TYPES,
+  PROBATION_STATUSES,
 } from '../../database/models/employee.model';
 import { TENANT_ROLES } from '../../database/models/membership.model';
 import { authenticate, requirePermission, resolveTenant } from '../../middleware/auth';
@@ -100,7 +101,6 @@ const adminPatchBody = z
         'Use the deactivate endpoint to terminate',
       ),
     joiningDate: dateInput,
-    confirmationDate: dateInput,
     noticePeriodStartDate: dateInput,
     lastWorkingDate: dateInput,
     address,
@@ -129,6 +129,8 @@ const listQuery = z
     managerId: objectId.optional(),
     status: z.enum(EMPLOYMENT_STATUSES).optional(),
     employmentType: z.enum(EMPLOYMENT_TYPES).optional(),
+    probationStatus: z.enum(PROBATION_STATUSES).optional(),
+    probationEndBefore: dateInput.optional(),
     sort: z
       .enum([
         'firstName',
@@ -479,6 +481,88 @@ export function registerEmployeeRoutes(v1: Router, env: Env): void {
       res.json({
         success: true,
         data: { employmentStatus: emp.employmentStatus, lastWorkingDate: emp.lastWorkingDate },
+      });
+    }),
+  );
+
+  const probationBody = z
+    .object({ endDate: dateInput, reason: z.string().trim().max(500).optional() })
+    .strict();
+  route(
+    v1,
+    {
+      method: 'post',
+      path: '/employees/:id/probation',
+      summary:
+        'Start probation with an end date, or extend it (later end date and a reason). Recorded in the employee history.',
+      tags: ['Employees'],
+      auth: 'tenant',
+      permission: 'employee:update',
+      body: probationBody,
+    },
+    ...chain,
+    requirePermission('employee:update'),
+    validate({ params: idParams, body: probationBody }),
+    asyncHandler(async (req, res) => {
+      const emp = await svc.setProbation(
+        req.tenantCtx!.tenantId,
+        req.auth!.userId,
+        String(req.params.id),
+        req.body,
+      );
+      await writeAudit(req, {
+        action: 'employee.probation_set',
+        entityType: 'Employee',
+        entityId: emp._id,
+        reason: req.body.reason,
+        after: { probationStatus: emp.probationStatus, probationEndDate: emp.probationEndDate },
+      });
+      res.json({
+        success: true,
+        data: { probationStatus: emp.probationStatus, probationEndDate: emp.probationEndDate },
+      });
+    }),
+  );
+
+  const confirmBody = z
+    .object({
+      confirmationDate: dateInput.optional(),
+      comment: z.string().trim().max(500).optional(),
+    })
+    .strict();
+  route(
+    v1,
+    {
+      method: 'post',
+      path: '/employees/:id/confirm',
+      summary:
+        'Confirm an employee who is on probation. Cannot be used on your own record. Recorded in the history and audit log.',
+      tags: ['Employees'],
+      auth: 'tenant',
+      permission: 'employee:confirm',
+      body: confirmBody,
+    },
+    ...chain,
+    requirePermission('employee:confirm'),
+    validate({ params: idParams, body: confirmBody }),
+    asyncHandler(async (req, res) => {
+      const ctx = req.tenantCtx!;
+      const emp = await svc.confirmEmployee(
+        ctx.tenantId,
+        { userId: req.auth!.userId, employeeId: ctx.employeeId },
+        String(req.params.id),
+        req.body,
+      );
+      await writeAudit(req, {
+        action: 'employee.confirmed',
+        entityType: 'Employee',
+        entityId: emp._id,
+        reason: req.body.comment,
+        after: { probationStatus: emp.probationStatus, confirmationDate: emp.confirmationDate },
+      });
+      res.json({
+        success: true,
+        data: { probationStatus: emp.probationStatus, confirmationDate: emp.confirmationDate },
       });
     }),
   );

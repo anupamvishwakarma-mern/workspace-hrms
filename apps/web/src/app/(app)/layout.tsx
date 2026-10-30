@@ -1,6 +1,7 @@
 'use client';
 import {
   BookOpen,
+  Briefcase,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -94,6 +95,14 @@ export const NAV: NavItem[] = [
     label: 'nav.departments',
     icon: Building2,
     perms: ['department:manage'],
+    group: 'Company setup',
+    groupKey: 'group.setup',
+  },
+  {
+    href: '/designations',
+    label: 'nav.designations',
+    icon: Briefcase,
+    perms: ['designation:manage'],
     group: 'Company setup',
     groupKey: 'group.setup',
   },
