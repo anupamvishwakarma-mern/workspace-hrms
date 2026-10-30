@@ -1,7 +1,8 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { PageTop } from '@/components/page-top';
-import { DonutChart, Panel } from '../dashboard/charts';
+import { CalendarDays } from 'lucide-react';
+import { BreakdownPanel } from '../dashboard/charts';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -57,17 +58,17 @@ export default function HolidaysPage() {
         actions={<Button onClick={() => setEditing('new')}>Add holiday</Button>}
       />
       {q.data && q.data.data.length > 0 ? (
-        <Panel title="Holidays by type" className="mb-5">
-          <DonutChart
-            pie
-            data={Object.entries(
-              q.data.data.reduce<Record<string, number>>(
-                (m, h) => ({ ...m, [h.holidayType]: (m[h.holidayType] ?? 0) + 1 }),
-                {},
-              ),
-            ).map(([name, value]) => ({ name: label(name), value }))}
-          />
-        </Panel>
+        <BreakdownPanel
+          title="Holidays by type"
+          icon={CalendarDays}
+          unit="Holidays"
+          data={Object.entries(
+            q.data.data.reduce<Record<string, number>>(
+              (m, h) => ({ ...m, [h.holidayType]: (m[h.holidayType] ?? 0) + 1 }),
+              {},
+            ),
+          ).map(([name, value]) => ({ name: label(name), value }))}
+        />
       ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!q.data ? (

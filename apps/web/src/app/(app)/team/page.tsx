@@ -2,7 +2,8 @@
 import { useMemo, useState } from 'react';
 import { PageTop } from '@/components/page-top';
 import { Alert, Avatar, Badge, Empty, Skeleton, TabBar } from '@/components/ui/display';
-import { DonutChart, Panel } from '../dashboard/charts';
+import { Users } from 'lucide-react';
+import { BreakdownPanel } from '../dashboard/charts';
 import { Input } from '@/components/ui/form';
 import { useOne } from '@/hooks/api';
 import { userMessage } from '@/lib/errors';
@@ -64,17 +65,17 @@ export default function TeamPage() {
         ]}
       />
       {data ? (
-        <Panel title="Team status today" className="mb-5">
-          <DonutChart
-            center={data.members.length}
-            centerSub="people"
-            data={ORDER.map((s) => ({
-              name: t(`team.${s}` as Key),
-              value: data.counts[s] ?? 0,
-            })).filter((x) => x.value > 0)}
-            empty="No team members to show."
-          />
-        </Panel>
+        <BreakdownPanel
+          title="Team status today"
+          icon={Users}
+          total={data.members.length}
+          unit="People"
+          data={ORDER.map((s) => ({
+            name: t(`team.${s}` as Key),
+            value: data.counts[s] ?? 0,
+          }))}
+          empty="No team members to show."
+        />
       ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!data ? (

@@ -20,6 +20,7 @@ const schema = z.object({
   requireGeofence: z.boolean(),
   allowSelfApproval: z.boolean(),
   requireSeparatePublisher: z.boolean(),
+  autoLeave: z.boolean(),
   empPrefix: z.string().trim().regex(/^[A-Za-z0-9\-_/]{0,10}$/, 'Up to 10 letters, digits, - _ or /'),
   empPadding: z.coerce.number().int().min(1, 'Min 1').max(8, 'Max 8'),
   ltrPrefix: z.string().trim().regex(/^[A-Za-z0-9\-_/]{0,10}$/, 'Up to 10 letters, digits, - _ or /'),
@@ -51,6 +52,7 @@ export default function SettingsPage() {
       requireGeofence: a.requireGeofence ?? true,
       allowSelfApproval: a.allowSelfApproval ?? false,
       requireSeparatePublisher: t.settings?.payroll?.requireSeparatePublisher ?? false,
+      autoLeave: t.settings?.leave?.autoAccrual ?? false,
       empPrefix: t.numbering?.employee.prefix ?? 'EMP-',
       empPadding: t.numbering?.employee.padding ?? 4,
       ltrPrefix: t.numbering?.letter.prefix ?? 'LTR-',
@@ -64,6 +66,7 @@ export default function SettingsPage() {
     });
   }, [t, f]);
   const payrollOn = t?.modules?.includes('PAYROLL') ?? true;
+  const leaveOn = t?.modules?.includes('LEAVE') ?? true;
   const save = useSave(
     (v: Out) =>
       api.patch('/tenants/current', {
@@ -79,6 +82,7 @@ export default function SettingsPage() {
             maxAccuracyMeters: v.maxAccuracyMeters,
             maxOpenSessionHours: v.maxOpenSessionHours,
           },
+          ...(leaveOn ? { leave: { autoAccrual: v.autoLeave } } : {}),
           ...(payrollOn ? { payroll: { requireSeparatePublisher: v.requireSeparatePublisher } } : {}),
           numbering: {
             employee: { prefix: v.empPrefix, padding: v.empPadding },
@@ -199,6 +203,17 @@ export default function SettingsPage() {
               duties.
             </span>
           </label>
+          {leaveOn ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-1" {...f.register('autoLeave')} />
+              <span>
+                <b>Credit leave automatically.</b> Monthly-accrual leave types are credited each
+                month, and unused days are carried forward in January (up to each type&apos;s limit).
+                Starts from the month you switch it on and never back-fills earlier months. Credits
+                can also still be run by hand.
+              </span>
+            </label>
+          ) : null}
           {payrollOn ? (
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" {...f.register('requireSeparatePublisher')} />

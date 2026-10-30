@@ -3,6 +3,7 @@ import type { TenantRole } from '../../database/models/membership.model';
 export type Permission =
   | 'tenant:read'
   | 'tenant:update'
+  | 'role:manage' // create, edit and delete company-defined roles (owner only)
   | 'employee:read:all'
   | 'employee:read:team'
   | 'employee:read:basic' // minimal projection (payroll)
@@ -27,6 +28,8 @@ export type Permission =
   | 'attendance:review:all'
   | 'attendance:manual' // record attendance for someone else directly, with a reason
   | 'wfh:request' // ask to work from home on given days
+  | 'exit:request' // resign (raise your own resignation)
+  | 'exit:manage' // see every resignation
   | 'attendance:review:team'
   | 'shift:read'
   | 'shift:manage'
@@ -71,6 +74,7 @@ const COMMON: Permission[] = [
   'handbook:read',
   'approval:use',
   'wfh:request',
+  'exit:request',
 ];
 
 const HR_PERMS: Permission[] = [
@@ -112,10 +116,17 @@ const HR_PERMS: Permission[] = [
   'approval:manage',
   'recruitment:manage',
   'recruitment:feedback',
+  'exit:manage',
 ];
 
 export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
-  COMPANY_OWNER: [...HR_PERMS, 'tenant:update', 'employee:read:team', 'employee:read:basic'],
+  COMPANY_OWNER: [
+    ...HR_PERMS,
+    'tenant:update',
+    'role:manage',
+    'employee:read:team',
+    'employee:read:basic',
+  ],
   HR_ADMIN: HR_PERMS,
   MANAGER: [
     'tenant:read',

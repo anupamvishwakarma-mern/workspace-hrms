@@ -1,4 +1,5 @@
 import type { Router } from 'express';
+import { localDate } from '../attendance/dates';
 import { enabledModules } from './modules';
 import { PREFIX_RE, resolveNumbering } from './numbering';
 import { z } from 'zod';
@@ -55,6 +56,7 @@ const patchBody = z
           .partial()
           .strict(),
         payroll: z.object({ requireSeparatePublisher: z.boolean() }).partial().strict(),
+        leave: z.object({ autoAccrual: z.boolean() }).partial().strict(),
         numbering: z
           .object({ employee: numberingRule, letter: numberingRule, document: numberingRule })
           .partial()
@@ -146,6 +148,12 @@ export function registerTenantRoutes(v1: Router, env: Env): void {
         ...(settings ? flatten('settings.', settings as Record<string, unknown>) : {}),
         ...(branding ? flatten('branding.', branding as Record<string, unknown>) : {}),
       };
+      // Switching automatic leave on starts the clock at the current month, so it never back-fills history.
+      const turningOn =
+        (settings as { leave?: { autoAccrual?: boolean } } | undefined)?.leave?.autoAccrual === true &&
+        !(before.settings as { leave?: { autoAccrual?: boolean } } | undefined)?.leave?.autoAccrual;
+      if (turningOn)
+        ($set as Record<string, unknown>)['settings.leave.autoSince'] = localDate(new Date(), before.timezone).slice(0, 7);
       const after = await Tenant.findByIdAndUpdate(before._id, { $set }, { new: true }).lean();
       await writeAudit(req, {
         action: 'tenant.update',

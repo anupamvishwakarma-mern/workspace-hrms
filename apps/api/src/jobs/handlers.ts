@@ -9,6 +9,8 @@ import { Tenant } from '../database/models/tenant.model';
 import { runInTenantDb } from '../database/tenantContext';
 import { forEachTenantDb } from '../database/tenantDb';
 import type { Env } from '../config/env';
+import { escalateOverdue } from '../modules/approvals/approvals.service';
+import { notifyEmployee } from '../modules/notifications/push.service';
 import { getStorage } from '../modules/documents/storage';
 import { loadTenant, recalculateDay } from '../modules/attendance/attendance.service';
 import { addDays, isValidTimezone, localDate } from '../modules/attendance/dates';
@@ -188,4 +190,28 @@ export async function purgePunchPhotos(env: Env, now: Date, retentionDays: numbe
     purged: results.reduce((n, r) => n + r.purged, 0),
     cutoff: new Date(now.getTime() - retentionDays * 86_400_000),
   };
+}
+
+/**
+ * Escalates overdue approval steps in every company database and tells the people who just became approvers.
+ * Idempotent: a step is escalated at most once.
+ */
+export async function escalateApprovals(env: Env, now: Date) {
+  const { results, failed } = await forEachTenantDb(async (dbName) => {
+    // Only the companies that live in the database being visited (legacy companies share the default one).
+    const tenants = await Tenant.find({ status: 'ACTIVE' }).select('_id dbName').lean();
+    let escalated = 0;
+    for (const t of tenants.filter((x) => (x.dbName ?? undefined) === dbName)) {
+      const r = await escalateOverdue(t._id, now);
+      escalated += r.escalated;
+      for (const n of r.notify)
+        notifyEmployee(env, t._id, n.employeeId as never, {
+          title: 'Approval needs attention',
+          body: `${n.title} has been waiting too long and was escalated to you.`,
+          data: { type: 'approval', requestId: String(n.requestId) },
+        });
+    }
+    return { escalated };
+  });
+  return { escalated: results.reduce((n, r) => n + r.escalated, 0), failed };
 }

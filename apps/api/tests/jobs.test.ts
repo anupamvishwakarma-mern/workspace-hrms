@@ -231,7 +231,7 @@ describe.skipIf(!REDIS_BIN && !process.env.TEST_REDIS_URL)('BullMQ with a real R
     await registerSchedules(q);
     await registerSchedules(q);
     const s = await q.getJobSchedulers();
-    expect(s.map((x) => x.name).sort()).toEqual([JOBS.purge, JOBS.sweep, JOBS.uploads].sort());
+    expect(s.map((x) => x.name).sort()).toEqual([JOBS.escalate, JOBS.leave, JOBS.purge, JOBS.sweep, JOBS.uploads].sort());
     await q.close();
   });
 

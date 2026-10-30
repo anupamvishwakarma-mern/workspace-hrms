@@ -1,7 +1,7 @@
 'use client';
-import { Download } from 'lucide-react';
+import { ExportButtons } from '@/components/export-buttons';
+import type { ExportFormat } from '@/lib/export';
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Alert, Badge, Card, CardTitle, Skeleton } from '@/components/ui/display';
 import { useAuth } from '@/components/auth';
 import { useList } from '@/hooks/api';
@@ -25,22 +25,19 @@ const REPORTS = [
 ] as const;
 
 export function ReportsCards({ from, to }: { from: string; to: string }) {
-  const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
-  async function run(type: 'daily' | 'summary') {
-    setBusy(type);
+  async function run(type: 'daily' | 'summary', format: ExportFormat) {
     setError(undefined);
     try {
       const { blob, filename } = await api.download('/reports/attendance/export', {
         from,
         to,
         type,
+        format,
       });
       downloadBlob(blob, filename);
     } catch (e) {
       setError(userMessage(e));
-    } finally {
-      setBusy(undefined);
     }
   }
   return (
@@ -57,15 +54,7 @@ export function ReportsCards({ from, to }: { from: string; to: string }) {
               <p className="text-sm font-semibold">{r.title}</p>
               <p className="text-xs text-muted">{r.text}</p>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="self-start"
-              loading={busy === r.type}
-              onClick={() => void run(r.type)}
-            >
-              <Download className="h-4 w-4" aria-hidden /> Download CSV
-            </Button>
+            <ExportButtons className="inline-flex items-center gap-1.5 self-start" onExport={(f) => run(r.type, f)} />
           </Card>
         ))}
       </div>

@@ -1,7 +1,7 @@
 'use client';
-import { Download } from 'lucide-react';
+import { ExportButtons } from '@/components/export-buttons';
+import { downloadTable, type ExportFormat } from '@/lib/export';
 import { useState, type ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
 import {
   Alert,
   Card,
@@ -19,7 +19,6 @@ import { useTenant } from '@/hooks/lookups';
 import { userMessage } from '@/lib/errors';
 import type { LeaveOverview } from '@/lib/types';
 import { todayIso } from '@/lib/utils';
-import { downloadCsv } from '../attendance/csv';
 import { monthLabel } from '../attendance/lib';
 import { Delta, Kpi, Meter, MONTH_OPTIONS, ViewHeader, fmtPct } from '../attendance/shared';
 import { rangeText } from './data';
@@ -49,9 +48,9 @@ export function OwnerView({ switcher }: { switcher: ReactNode }) {
   );
   const o = q.data?.data;
 
-  const exportCsv = () => {
+  const exportData = (format: ExportFormat) => {
     if (!o) return;
-    downloadCsv(`leave-overview-${o.month}.csv`, [
+    return downloadTable(`leave-overview-${o.month}`, [
       [
         'Department',
         'Headcount',
@@ -73,7 +72,7 @@ export function OwnerView({ switcher }: { switcher: ReactNode }) {
       [],
       ['Leave type', 'Days (6 months)', 'Share %'],
       ...o.byType.map((t) => [t.name, t.days, t.share]),
-    ]);
+    ], format);
   };
 
   const maxTrend = Math.max(1, ...(o?.trend.map((t) => t.days) ?? [1]));
@@ -318,13 +317,10 @@ export function OwnerView({ switcher }: { switcher: ReactNode }) {
               <div>
                 <CardTitle>Department and leave-type summary</CardTitle>
                 <p className="mt-1 text-sm text-muted">
-                  Download the figures behind this page as a CSV.
+                  Download the figures behind this page as CSV or Excel.
                 </p>
               </div>
-              <Button variant="secondary" onClick={exportCsv}>
-                <Download className="mr-1.5 size-4" aria-hidden />
-                Export CSV
-              </Button>
+              <ExportButtons size="md" onExport={exportData} />
             </Card>
           ) : null}
         </>

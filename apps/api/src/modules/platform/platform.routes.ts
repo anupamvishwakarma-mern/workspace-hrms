@@ -13,6 +13,7 @@ import { writeAudit } from '../audit/audit.service';
 import { runInTenantDb } from '../../database/tenantContext';
 import { runInTenant } from '../../database/tenantDb';
 import { MAX_MEMBERS, onboardBody, provisionTenant } from '../tenants/provisioning';
+import { registerPlatformInsights } from './platform.insights';
 import { serializeTenant } from '../tenants/tenants.routes';
 import { MODULES, MODULE_DEPENDENCIES, MODULE_KEYS, checkModuleSet, enabledModules } from '../tenants/modules';
 
@@ -247,30 +248,5 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
     }),
   );
 
-  route(
-    v1,
-    {
-      method: 'get',
-      path: '/platform/metrics',
-      summary: 'Platform-level operational counts (no tenant business data).',
-      tags: ['Platform'],
-      auth: 'platform',
-    },
-    ...chain,
-    asyncHandler(async (_req, res) => {
-      const [byStatus, users] = await Promise.all([
-        Tenant.aggregate<{ _id: string; count: number }>([
-          { $group: { _id: '$status', count: { $sum: 1 } } },
-        ]),
-        User.countDocuments({ status: 'ACTIVE' }),
-      ]);
-      res.json({
-        success: true,
-        data: {
-          tenantsByStatus: Object.fromEntries(byStatus.map((b) => [b._id, b.count])),
-          activeUsers: users,
-        },
-      });
-    }),
-  );
+  registerPlatformInsights(v1, env);
 }

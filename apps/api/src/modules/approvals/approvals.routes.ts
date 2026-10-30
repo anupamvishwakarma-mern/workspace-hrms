@@ -2,7 +2,7 @@ import type { Router } from 'express';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
 import { ApprovalDelegation, ApprovalRequest } from '../../database/models/approvalRequest.model';
-import { APPROVAL_ROLES, APPROVER_TYPES, ApprovalWorkflow } from '../../database/models/approvalWorkflow.model';
+import { APPROVAL_ROLES, APPROVER_TYPES, STEP_MODES, ApprovalWorkflow } from '../../database/models/approvalWorkflow.model';
 import { Employee } from '../../database/models/employee.model';
 import { authenticate, requirePermission, resolveTenant } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -12,10 +12,28 @@ import { route } from '../../utils/route';
 import { idParams, objectId, paginationQuery, validate } from '../../utils/validate';
 import { hasPermission } from '../auth/permissions';
 import { writeAudit } from '../audit/audit.service';
+import { CONDITION_FIELD_RE, CONDITION_OPS } from './conditions';
 import { cancelRequest, decide, inboxFilter, submitRequest, type Actor } from './approvals.service';
 
-const stepBody = z
+const conditionBody = z
   .object({
+    field: z.string().regex(CONDITION_FIELD_RE, 'Use letters, digits and underscores'),
+    op: z.enum(CONDITION_OPS),
+    value: z.union([z.string().max(100), z.number().finite(), z.boolean()]),
+  })
+  .strict()
+  .superRefine((c, ctx) => {
+    if (['GT', 'GTE', 'LT', 'LTE'].includes(c.op) && typeof c.value !== 'number')
+      ctx.addIssue({ code: 'custom', message: 'Comparisons need a number', path: ['value'] });
+  });
+/** At least one step must apply to every request, so a condition can never make a request need no approval at all. */
+const needsUnconditionalStep = (steps: { condition?: unknown }[] | undefined, ctx: z.RefinementCtx) => {
+  if (steps && !steps.some((s) => !s.condition))
+    ctx.addIssue({ code: 'custom', message: 'At least one step must apply to every request (no condition)', path: ['steps'] });
+};
+const escalationBody = z
+  .object({
+    afterHours: z.number().int().min(1).max(720),
     approverType: z.enum(APPROVER_TYPES),
     level: z.number().int().min(1).max(5).optional(),
     role: z.enum(APPROVAL_ROLES).optional(),
@@ -27,20 +45,43 @@ const stepBody = z
     if (s.approverType === 'EMPLOYEE' && !s.employeeId)
       ctx.addIssue({ code: 'custom', message: 'employeeId is required', path: ['employeeId'] });
   });
+const stepBody = z
+  .object({
+    approverType: z.enum(APPROVER_TYPES),
+    condition: conditionBody.optional(),
+    escalation: escalationBody.optional(),
+    mode: z.enum(STEP_MODES).optional(),
+    quorum: z.number().int().min(2).max(20).optional(),
+    level: z.number().int().min(1).max(5).optional(),
+    role: z.enum(APPROVAL_ROLES).optional(),
+    employeeId: objectId.optional(),
+  })
+  .strict()
+  .superRefine((s, ctx) => {
+    if (s.approverType === 'ROLE' && !s.role) ctx.addIssue({ code: 'custom', message: 'role is required', path: ['role'] });
+    if (s.approverType === 'EMPLOYEE' && !s.employeeId)
+      ctx.addIssue({ code: 'custom', message: 'employeeId is required', path: ['employeeId'] });
+    if (s.mode === 'QUORUM' && !s.quorum)
+      ctx.addIssue({ code: 'custom', message: 'quorum is required when mode is QUORUM', path: ['quorum'] });
+    if (s.quorum && s.mode !== 'QUORUM')
+      ctx.addIssue({ code: 'custom', message: 'quorum only applies when mode is QUORUM', path: ['quorum'] });
+  });
 const workflowBody = z
   .object({
     name: z.string().trim().min(1).max(120),
     requestType: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_]{1,39}$/),
     steps: z.array(stepBody).min(1).max(8),
   })
-  .strict();
+  .strict()
+  .superRefine((b, ctx) => needsUnconditionalStep(b.steps, ctx));
 const workflowPatch = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
     steps: z.array(stepBody).min(1).max(8).optional(),
     status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((b, ctx) => needsUnconditionalStep(b.steps, ctx));
 const submitBody = z
   .object({
     requestType: z.string().trim().min(2).max(40),
@@ -70,6 +111,14 @@ const serStep = (s: Record<string, any>, names: Names) => ({
   approverType: s.approverType,
   role: s.role,
   status: s.status,
+  skippedReason: s.skippedReason,
+  mode: s.mode ?? 'ANY',
+  required: s.required ?? 1,
+  approvedCount: ((s.approvals as unknown[]) ?? []).length,
+  approvedNames: ((s.approvals as Record<string, any>[]) ?? []).map((a) => nm(names, a.actedByEmployeeId) ?? 'Unknown'),
+  pendingSince: s.pendingSince,
+  escalatedAt: s.escalatedAt,
+  escalatedToNames: ((s.escalatedToEmployeeIds as unknown[]) ?? []).map((i) => nm(names, i) ?? 'Unknown'),
   approverEmployeeIds: ((s.approverEmployeeIds as unknown[]) ?? []).map(String),
   approverNames: ((s.approverEmployeeIds as unknown[]) ?? []).map((i) => nm(names, i) ?? 'Unknown'),
   actedByName: nm(names, s.actedByEmployeeId),
@@ -99,6 +148,10 @@ async function namesFor(tenantId: unknown, docs: Record<string, any>[]): Promise
     ids.add(String(d.requesterEmployeeId));
     for (const s of d.steps ?? []) {
       for (const a of s.approverEmployeeIds ?? []) ids.add(String(a));
+      for (const a of s.escalatedToEmployeeIds ?? []) ids.add(String(a));
+      for (const a of s.approvals ?? []) {
+        if (a.actedByEmployeeId) ids.add(String(a.actedByEmployeeId));
+      }
       if (s.actedByEmployeeId) ids.add(String(s.actedByEmployeeId));
       if (s.onBehalfOfEmployeeId) ids.add(String(s.onBehalfOfEmployeeId));
     }
@@ -118,6 +171,10 @@ const serWorkflow = (d: Record<string, any>) => ({
     level: s.level,
     role: s.role,
     employeeId: s.employeeId ? String(s.employeeId) : undefined,
+    mode: s.mode ?? 'ANY',
+    quorum: s.quorum,
+    escalation: s.escalation ? { afterHours: s.escalation.afterHours, approverType: s.escalation.approverType, level: s.escalation.level, role: s.escalation.role, employeeId: s.escalation.employeeId ? String(s.escalation.employeeId) : undefined } : undefined,
+    condition: s.condition ? { field: s.condition.field, op: s.condition.op, value: s.condition.value } : undefined,
   })),
   updatedAt: d.updatedAt,
 });
@@ -143,7 +200,8 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
   );
 
   const checkEmployees = async (tenantId: unknown, steps: z.infer<typeof stepBody>[]) => {
-    for (const s of steps.filter((x) => x.approverType === 'EMPLOYEE')) {
+    const named = steps.flatMap((x) => [x, ...(x.escalation ? [x.escalation] : [])]).filter((x) => x.approverType === 'EMPLOYEE');
+    for (const s of named) {
       const e = await Employee.exists({ _id: s.employeeId, tenantId: tenantId as never });
       if (!e) throw AppError.badRequest('Approver employee not found');
     }

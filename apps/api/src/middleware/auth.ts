@@ -1,3 +1,4 @@
+import { loadExtraPermissions } from '../modules/auth/customRoles';
 import type { RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
 import { Types } from 'mongoose';
@@ -109,6 +110,12 @@ export const resolveTenant: RequestHandler = async (req, _res, next) => {
     req.tenantCtx = {
       tenantId: chosen.tenantId,
       roles: chosen.roles,
+      extraPermissions: await loadExtraPermissions(
+        tenant.dbName ?? undefined,
+        chosen.tenantId,
+        chosen.customRoleIds,
+        tenant.modules,
+      ),
       employeeId: chosen.employeeId ?? undefined,
     };
     // Everything downstream of this middleware (handlers, services, audit) talks to the company's own database.

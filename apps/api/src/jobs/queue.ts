@@ -2,9 +2,11 @@ import { Queue, Worker, type Job } from 'bullmq';
 import IORedis from 'ioredis';
 import type { Logger } from 'pino';
 import type { Env } from '../config/env';
+import { runLeaveAutomation } from '../modules/leave/automation';
 import {
   cleanupStaleUploads,
   dailyAttendanceSweep,
+  escalateApprovals,
   purgeLocationData,
   purgePunchPhotos,
 } from './handlers';
@@ -14,6 +16,8 @@ export const JOBS = {
   sweep: 'daily-attendance-sweep',
   purge: 'purge-location-data',
   uploads: 'cleanup-stale-uploads',
+  escalate: 'escalate-approvals',
+  leave: 'leave-automation',
 } as const;
 
 /** BullMQ needs maxRetriesPerRequest=null on the blocking worker connection. */
@@ -39,6 +43,10 @@ export async function runJob(name: string, deps: JobDeps): Promise<unknown> {
       };
     case JOBS.uploads:
       return cleanupStaleUploads(deps.env, now);
+    case JOBS.leave:
+      return runLeaveAutomation(now, { localHours: [2, 3], log: deps.log });
+    case JOBS.escalate:
+      return escalateApprovals(deps.env, now);
     default:
       throw new Error(`Unknown job: ${name}`);
   }
@@ -53,6 +61,8 @@ export async function runJob(name: string, deps: JobDeps): Promise<unknown> {
 export async function registerSchedules(queue: Queue): Promise<void> {
   await queue.upsertJobScheduler(JOBS.sweep, { pattern: '5 * * * *' }, { name: JOBS.sweep });
   await queue.upsertJobScheduler(JOBS.uploads, { pattern: '30 * * * *' }, { name: JOBS.uploads });
+  await queue.upsertJobScheduler(JOBS.escalate, { pattern: '10 * * * *' }, { name: JOBS.escalate });
+  await queue.upsertJobScheduler(JOBS.leave, { pattern: '20 * * * *' }, { name: JOBS.leave });
   await queue.upsertJobScheduler(JOBS.purge, { pattern: '15 3 * * *' }, { name: JOBS.purge });
 }
 

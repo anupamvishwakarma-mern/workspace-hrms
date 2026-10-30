@@ -1,7 +1,23 @@
 'use client';
+import {
+  BarChart3,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Eye,
+  FileText,
+  ShieldCheck,
+  Users,
+  Wallet,
+  Workflow,
+  XCircle,
+  type LucideIcon,
+} from 'lucide-react';
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useAuth } from '@/components/auth';
-import { Card } from '@/components/ui/display';
 import { cn } from '@/lib/utils';
 
 const RANK: [string, string, string][] = [
@@ -27,30 +43,110 @@ export function RoleChip({ scope }: { scope?: string }) {
   );
 }
 
+export type StatColor = 'teal' | 'green' | 'amber' | 'rose' | 'indigo' | 'sky' | 'slate';
+
 export interface Stat {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   tone?: 'neutral' | 'warn' | 'danger' | 'success';
+  /** Defaults from the label (people, money, time, documents…). */
+  icon?: LucideIcon;
+  /** Defaults from the tone, then cycles through the palette. */
+  color?: StatColor;
+  /** Makes the card a link and shows the chevron. */
+  href?: string;
 }
 
-/** A row of headline numbers. Keep to four to six. */
+const COLOR_VAR: Record<StatColor, string> = {
+  teal: 'var(--chart-1)',
+  green: 'var(--success)',
+  amber: 'var(--chart-2)',
+  rose: 'var(--chart-3)',
+  indigo: 'var(--chart-5)',
+  sky: 'var(--chart-6)',
+  slate: 'var(--chart-4)',
+};
+const CYCLE: StatColor[] = ['teal', 'indigo', 'sky', 'amber', 'rose', 'slate'];
+const TONE_COLOR = { warn: 'amber', danger: 'rose', success: 'green' } as const;
+
+const ICON_HINTS: [RegExp, LucideIcon][] = [
+  [/pending|waiting|open|queue|review/i, Clock],
+  [/notice|expir|due|overdue/i, Eye],
+  [/leave|holiday|absent|off\b/i, CalendarDays],
+  [/late|hour|time|shift|overtime/i, Clock],
+  [/pay|salary|net|gross|cost|amount|deduction|earning|₹|money/i, Wallet],
+  [/letter|template|document|policy|handbook|file|report|log|audit|event/i, FileText],
+  [/depart|location|office|branch|site|org|structure/i, Building2],
+  [/role|permission|access|admin|head|manager|approver|owner/i, ShieldCheck],
+  [/approved|active|present|complete|done|issued|published|enabled|on time/i, CheckCircle2],
+  [/reject|declin|denied|fail|inactive|revoked|blocked|exception/i, XCircle],
+  [/workflow|step|rule|stage/i, Workflow],
+  [/employ|people|team|staff|member|person|headcount|direct|reports|user/i, Users],
+];
+
+function iconFor(s: Stat, i: number): LucideIcon {
+  if (s.icon) return s.icon;
+  const hit = ICON_HINTS.find(([re]) => re.test(s.label));
+  if (hit) return hit[1];
+  return [Users, BarChart3, FileText, CalendarDays][i % 4]!;
+}
+
+/** A row of headline numbers: tinted card, icon in a soft circle, big coloured number, chevron when it links. */
 export function StatStrip({ stats }: { stats: Stat[] }) {
-  const color = { neutral: '', warn: 'text-warn', danger: 'text-danger', success: 'text-success' };
   return (
     <section
       aria-label="Summary"
-      className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]"
+      className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))]"
     >
-      {stats.map((s) => (
-        <Card key={s.label} className="p-4">
-          <p className="text-xs font-medium text-muted">{s.label}</p>
-          <p className={cn('mt-1 text-2xl font-bold tabular-nums', color[s.tone ?? 'neutral'])}>
-            {s.value}
-          </p>
-          {s.sub ? <p className="mt-1 text-[11px] text-muted">{s.sub}</p> : null}
-        </Card>
-      ))}
+      {stats.map((s, i) => {
+        const key: StatColor =
+          s.color ?? (s.tone && s.tone !== 'neutral' ? TONE_COLOR[s.tone] : CYCLE[i % CYCLE.length]!);
+        const c = COLOR_VAR[key];
+        const Icon = iconFor(s, i);
+        const style = {
+          background: `color-mix(in srgb, ${c} 9%, var(--card))`,
+          borderColor: `color-mix(in srgb, ${c} 28%, var(--border))`,
+        };
+        const body = (
+          <>
+            <span
+              aria-hidden
+              className="grid size-11 shrink-0 place-items-center rounded-full"
+              style={{ background: `color-mix(in srgb, ${c} 20%, transparent)`, color: c }}
+            >
+              <Icon className="size-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-medium text-muted">{s.label}</span>
+              <span
+                className="block text-2xl font-bold leading-tight tabular-nums"
+                style={{ color: c }}
+              >
+                {s.value}
+              </span>
+              {s.sub ? <span className="block truncate text-[11px] text-muted">{s.sub}</span> : null}
+            </span>
+            {s.href ? <ChevronRight aria-hidden className="size-4 shrink-0 text-muted" /> : null}
+          </>
+        );
+        const cls =
+          'flex items-center gap-3 rounded-2xl border p-4 shadow-sm transition-shadow';
+        return s.href ? (
+          <Link
+            key={s.label}
+            href={s.href}
+            className={cn(cls, 'hover:shadow-md focus-visible:outline-2 focus-visible:outline-primary')}
+            style={style}
+          >
+            {body}
+          </Link>
+        ) : (
+          <div key={s.label} className={cls} style={style}>
+            {body}
+          </div>
+        );
+      })}
     </section>
   );
 }

@@ -15,6 +15,47 @@ const stepSchema = new Schema(
     onBehalfOfEmployeeId: { type: Schema.Types.ObjectId, ref: 'Employee' },
     actedAt: Date,
     comment: { type: String, maxlength: 1000 },
+    /** Snapshot of the workflow's mode. `required` is how many distinct approvals complete the step (fixed when raised). */
+    mode: { type: String, enum: ['ANY', 'ALL', 'QUORUM'], default: 'ANY' },
+    required: { type: Number, default: 1 },
+    /** Approvals recorded so far on a step that needs more than one. */
+    approvals: {
+      type: [
+        new Schema(
+          {
+            employeeId: { type: Schema.Types.ObjectId, ref: 'Employee' },
+            actedByUserId: { type: Schema.Types.ObjectId, ref: 'User' },
+            actedByEmployeeId: { type: Schema.Types.ObjectId, ref: 'Employee' },
+            onBehalfOfEmployeeId: { type: Schema.Types.ObjectId, ref: 'Employee' },
+            at: Date,
+            comment: { type: String, maxlength: 1000 },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+    /** When this step became the current one. Escalation is measured from here. */
+    pendingSince: Date,
+    /** Snapshot of the workflow's escalation rule, so later edits do not change requests in flight. */
+    escalation: {
+      type: new Schema(
+        {
+          afterHours: Number,
+          approverType: String,
+          level: Number,
+          role: String,
+          employeeId: Schema.Types.ObjectId,
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
+    /** Set once when the step was escalated (even if nobody new could be found), so it happens only once. */
+    escalatedAt: Date,
+    escalatedToEmployeeIds: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+    /** Why a SKIPPED step was skipped: no eligible approver, or its condition was not met. */
+    skippedReason: { type: String, enum: ['NO_APPROVER', 'CONDITION'] },
   },
   { _id: false },
 );

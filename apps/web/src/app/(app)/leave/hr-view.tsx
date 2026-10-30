@@ -1,6 +1,7 @@
 'use client';
+import { ExportButtons } from '@/components/export-buttons';
+import { downloadTable, type ExportFormat } from '@/lib/export';
 import { useQuery } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,6 @@ import { useTenant } from '@/hooks/lookups';
 import { api } from '@/lib/api';
 import type { LeaveBalance } from '@/lib/types';
 import { todayIso } from '@/lib/utils';
-import { downloadCsv } from '../attendance/csv';
 import { monthEnd, monthStart } from '../attendance/lib';
 import { Kpi, MONTH_OPTIONS, ViewHeader } from '../attendance/shared';
 import { ApprovalsPanel } from './approvals';
@@ -93,9 +93,9 @@ export function HrView({ switcher }: { switcher: ReactNode }) {
     0,
   );
 
-  const exportCsv = () => {
+  const exportData = (format: ExportFormat) => {
     const rows = repQ.data ?? [];
-    downloadCsv(`leave-${repMonth}.csv`, [
+    return downloadTable(`leave-${repMonth}`, [
       [
         'Employee code',
         'Employee',
@@ -122,7 +122,7 @@ export function HrView({ switcher }: { switcher: ReactNode }) {
         r.reviewComment,
         r.createdAt.slice(0, 10),
       ]),
-    ]);
+    ], format);
   };
 
   return (
@@ -328,10 +328,7 @@ export function HrView({ switcher }: { switcher: ReactNode }) {
                   </Select>
                 )}
               </Field>
-              <Button variant="secondary" disabled={!repQ.data?.length} onClick={exportCsv}>
-                <Download className="mr-1.5 size-4" aria-hidden />
-                Export CSV
-              </Button>
+              <ExportButtons size="md" disabled={!repQ.data?.length} onExport={exportData} />
             </div>
           </div>
           {repQ.isPending ? (

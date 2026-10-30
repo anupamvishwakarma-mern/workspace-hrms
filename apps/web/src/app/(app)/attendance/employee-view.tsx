@@ -1,5 +1,7 @@
 'use client';
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { ExportButtons } from '@/components/export-buttons';
+import { downloadTable, type ExportFormat } from '@/lib/export';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth';
 import { Button } from '@/components/ui/button';
@@ -8,7 +10,6 @@ import { useList, useOne } from '@/hooks/api';
 import { useTenant } from '@/hooks/lookups';
 import type { Correction, DayRow, Employee, Shift } from '@/lib/types';
 import { addDaysIso, formatDate, todayIso } from '@/lib/utils';
-import { downloadCsv } from './csv';
 import { DayDetail } from './day-detail';
 import { LeaveBalanceCard, LeaveThisMonth, RosterCard, UpcomingHolidays } from './leave-roster';
 import {
@@ -117,7 +118,7 @@ export function EmployeeView({ switcher }: { switcher: ReactNode }) {
     goTo('requests');
   };
 
-  function exportData() {
+  function exportData(format: ExportFormat) {
     if (!m) return;
     setExportError(undefined);
     const head = [
@@ -142,7 +143,7 @@ export function EmployeeView({ switcher }: { switcher: ReactNode }) {
         r.lateMinutes,
         r.overtimeMinutes,
       ]);
-    downloadCsv(`my-attendance-${m}.csv`, [head, ...lines]);
+    void downloadTable(`my-attendance-${m}`, [head, ...lines], format);
   }
 
   const allTabs: { key: Tab; label: string }[] = [
@@ -209,9 +210,7 @@ export function EmployeeView({ switcher }: { switcher: ReactNode }) {
               </Button>
             </div>
             {own ? (
-              <Button variant="secondary" onClick={exportData}>
-                <Download className="h-4 w-4" aria-hidden /> Export
-              </Button>
+              <ExportButtons size="md" onExport={exportData} />
             ) : null}
             {own ? <Button onClick={() => regularize()}>Regularize attendance</Button> : null}
           </>

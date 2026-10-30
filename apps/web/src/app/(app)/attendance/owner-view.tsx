@@ -1,5 +1,7 @@
 'use client';
-import { Download, Share2 } from 'lucide-react';
+import { ExportButtons } from '@/components/export-buttons';
+import type { ExportFormat } from '@/lib/export';
+import { Share2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth';
 import { Button } from '@/components/ui/button';
@@ -65,7 +67,7 @@ export function OwnerView({ switcher }: { switcher: ReactNode }) {
   );
   const o = q.data?.data;
 
-  async function download() {
+  async function download(format: ExportFormat) {
     if (!m) return;
     setNote(undefined);
     try {
@@ -73,6 +75,7 @@ export function OwnerView({ switcher }: { switcher: ReactNode }) {
         from: monthStart(m),
         to: monthEnd(m),
         type: 'summary',
+        format,
       });
       downloadBlob(blob, filename);
     } catch (e) {
@@ -138,9 +141,7 @@ export function OwnerView({ switcher }: { switcher: ReactNode }) {
             <Button variant="secondary" onClick={() => void share()}>
               <Share2 className="h-4 w-4" aria-hidden /> Share
             </Button>
-            <Button onClick={() => void download()}>
-              <Download className="h-4 w-4" aria-hidden /> Download summary (CSV)
-            </Button>
+            <ExportButtons size="md" prefix="Summary" onExport={download} />
           </>
         }
       />
@@ -464,22 +465,19 @@ function Attention({ o }: { o: Overview }) {
 
 function Compliance({ o, from, to }: { o: Overview; from: string; to: string }) {
   const c = o.compliance;
-  const [busy, setBusy] = useState<string>();
   const [err, setErr] = useState<string>();
-  async function run(type: 'summary' | 'daily') {
-    setBusy(type);
+  async function run(type: 'summary' | 'daily', format: ExportFormat) {
     setErr(undefined);
     try {
       const { blob, filename } = await api.download('/reports/attendance/export', {
         from,
         to,
         type,
+        format,
       });
       downloadBlob(blob, filename);
     } catch (e) {
       setErr(userMessage(e));
-    } finally {
-      setBusy(undefined);
     }
   }
   const payroll = (v: string | null) =>
@@ -547,14 +545,7 @@ function Compliance({ o, from, to }: { o: Overview; from: string; to: string }) 
                 <span className="block font-semibold">{r.title}</span>
                 <span className="text-xs text-muted">{r.text}</span>
               </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                loading={busy === r.type}
-                onClick={() => void run(r.type)}
-              >
-                CSV
-              </Button>
+              <ExportButtons onExport={(f) => run(r.type, f)} />
             </li>
           ))}
         </ul>

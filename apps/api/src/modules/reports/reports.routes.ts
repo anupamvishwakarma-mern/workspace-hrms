@@ -10,6 +10,7 @@ import { authenticate, requirePermission, resolveTenant } from '../../middleware
 import { asyncHandler } from '../../utils/asyncHandler';
 import type { Clock } from '../../utils/clock';
 import { toCsv, type CsvCell } from '../../utils/csv';
+import { XLSX_MIME, toXlsx } from '../../utils/xlsx';
 import { route } from '../../utils/route';
 import { objectId, paginationQuery, validate } from '../../utils/validate';
 import { writeAudit } from '../audit/audit.service';
@@ -40,7 +41,7 @@ const summaryQuery = z
   .refine(inRange, 'to is before from')
   .refine(withinLimit, `Date range cannot exceed ${MAX_DAYS} days`);
 const exportQuery = z
-  .object({ ...rangeBase, type: z.enum(['summary', 'daily']).default('summary') })
+  .object({ ...rangeBase, type: z.enum(['summary', 'daily']).default('summary'), format: z.enum(['csv', 'xlsx']).default('csv') })
   .strict()
   .refine(inRange, 'to is before from')
   .refine(withinLimit, `Date range cannot exceed ${MAX_DAYS} days`);
@@ -206,7 +207,7 @@ export function registerReportRoutes(v1: Router, env: Env, deps: { clock: Clock 
       method: 'get',
       path: '/reports/attendance/export',
       summary:
-        'Download attendance as CSV (type=summary or daily). Same scope as the on-screen reports; every export is audit-logged. Cells that could run as spreadsheet formulas are neutralised.',
+        'Download attendance as CSV or Excel (format=csv|xlsx, type=summary or daily). Same scope as the on-screen reports; every export is audit-logged. Cells that could run as spreadsheet formulas are neutralised.',
       tags: ['Reports'],
       auth: 'tenant',
       permission: 'attendance:read:all | attendance:read:team',
@@ -331,17 +332,19 @@ export function registerReportRoutes(v1: Router, env: Env, deps: { clock: Clock 
           to: q.to,
           rows: rows.length,
           scope: scope ? 'TEAM' : 'ALL',
+          format: q.format,
         },
       });
+      const base = `attendance-${q.type}_${q.from}_${q.to}`;
       res
         .status(200)
         .set({
-          'Content-Type': 'text/csv; charset=utf-8',
-          'Content-Disposition': `attachment; filename="attendance-${q.type}_${q.from}_${q.to}.csv"`,
+          'Content-Type': q.format === 'xlsx' ? XLSX_MIME : 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${base}.${q.format}"`,
           'Cache-Control': 'no-store',
           'X-Content-Type-Options': 'nosniff',
         })
-        .send(toCsv(header, rows));
+        .send(q.format === 'xlsx' ? await toXlsx(header, rows, `Attendance ${q.type}`) : toCsv(header, rows));
     }),
   );
 }

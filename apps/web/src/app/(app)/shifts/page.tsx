@@ -1,6 +1,8 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Clock } from 'lucide-react';
 import { PageTop } from '@/components/page-top';
+import { BreakdownPanel } from '../dashboard/charts';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -89,6 +91,19 @@ export default function ShiftsPage() {
         description="Shift rules drive late, half-day and overtime calculations. Changing a shift affects days calculated after the change."
         actions={<Button onClick={() => setEditing('new')}>Add shift</Button>}
       />
+      {q.data ? (
+        <BreakdownPanel
+          title="Shifts by type"
+          icon={Clock}
+          unit="Shifts"
+          data={Object.entries(
+            q.data.data.reduce<Record<string, number>>((m, s) => {
+              const k = s.overnight ? 'Overnight' : label(s.shiftType ?? 'FIXED');
+              return { ...m, [k]: (m[k] ?? 0) + 1 };
+            }, {}),
+          ).map(([name, value]) => ({ name, value }))}
+        />
+      ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!q.data ? (
         q.isError ? null : (

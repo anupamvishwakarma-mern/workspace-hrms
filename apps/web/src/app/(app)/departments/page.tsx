@@ -1,6 +1,8 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Building2 } from 'lucide-react';
 import { PageTop } from '@/components/page-top';
+import { BreakdownPanel } from '../dashboard/charts';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -58,6 +60,20 @@ export default function DepartmentsPage() {
         title="Departments"
         actions={<Button onClick={() => setEditing('new')}>Add department</Button>}
       />
+      {q.data && people.data ? (
+        <BreakdownPanel
+          title="Active people by department"
+          icon={Building2}
+          unit="People"
+          data={q.data.data
+            .map((d) => ({
+              name: d.name,
+              value: people.data!.data.filter((p) => p.departmentId === d.id).length,
+            }))
+            .sort((a, b) => b.value - a.value)}
+          empty="No active people are assigned to a department yet."
+        />
+      ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!q.data ? (
         q.isError ? null : (

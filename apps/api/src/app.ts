@@ -31,6 +31,8 @@ export function createApp(env: Env, logger: Logger, deps: { clock?: Clock } = {}
     }),
   );
   registerLocalStorageRoutes(app, env); // raw-body uploads; must come before the JSON parser
+  // Bulk imports carry up to 1000 spreadsheet rows, so those two endpoints get a larger body limit.
+  app.use(/^\/api\/v1\/(employees|leave\/balances)\/import$/, express.json({ limit: '2mb' }));
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
   app.use(rejectOperatorInjection);

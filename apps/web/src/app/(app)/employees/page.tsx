@@ -1,7 +1,9 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Building2, CheckCircle2, Users } from 'lucide-react';
+import Link from 'next/link';
 import { PageTop } from '@/components/page-top';
-import { DonutChart, Panel } from '../dashboard/charts';
+import { BreakdownPanel } from '../dashboard/charts';
 import { useToday, useWorkforce } from '../dashboard/data';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -32,10 +34,19 @@ import { ROLES, type Employee, type EmployeeDocument, type WorkLocation } from '
 import { compact, formatDate, isEnded, label } from '@/lib/utils';
 import { BankIds } from './bank-ids';
 import { ChangesTab } from './changes-tab';
+import { CustomRoles } from './custom-roles';
 import { ProfileItems } from './profile-items';
 
 const LIMIT = 20;
-const STATUSES = ['INVITED', 'ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED', 'RESIGNED', 'RETIRED'];
+const STATUSES = [
+  'INVITED',
+  'ACTIVE',
+  'ON_LEAVE',
+  'NOTICE_PERIOD',
+  'TERMINATED',
+  'RESIGNED',
+  'RETIRED',
+];
 
 export default function EmployeesPage() {
   const { can } = useAuth();
@@ -57,8 +68,14 @@ export default function EmployeesPage() {
     limit: 1,
   });
   const wf = useWorkforce(today.slice(0, 7));
-  const byDept = [...wf.data.byDepartment.entries()]
-    .map(([id, value]) => ({ name: depts.name(id) ?? 'No department', value }))
+  // Names resolve only once departments have loaded; merge people without one into a single row.
+  const deptCounts = new Map<string, number>();
+  for (const [id, value] of wf.data.byDepartment) {
+    const name = (id && depts.name(id)) || 'No department';
+    deptCounts.set(name, (deptCounts.get(name) ?? 0) + value);
+  }
+  const byDept = [...deptCounts.entries()]
+    .map(([name, value]) => ({ name, value }))
     .sort((a, b) => b.value - a.value);
   return (
     <>
@@ -69,14 +86,27 @@ export default function EmployeesPage() {
             label: 'Employed',
             value: wf.isPending ? '…' : wf.data.headcount,
             sub: 'Active, on leave or on notice',
+            icon: Users,
+            color: 'teal',
           },
-          { label: 'Active', value: activeQ.data?.meta?.total ?? '…', tone: 'success' },
+          {
+            label: 'Active',
+            value: activeQ.data?.meta?.total ?? '…',
+            tone: 'success',
+            icon: CheckCircle2,
+          },
           {
             label: 'On notice',
             value: noticeQ.data?.meta?.total ?? '…',
             tone: (noticeQ.data?.meta?.total ?? 0) > 0 ? 'warn' : 'neutral',
           },
-          { label: 'Departments', value: depts.items.length },
+          {
+            label: 'Departments',
+            value: depts.items.length,
+            color: 'indigo',
+            icon: Building2,
+            href: '/departments',
+          },
         ]}
         guide={[
           'Search by name or code, or filter by status and department. Select a person to open their profile, documents and pay structure.',
@@ -87,18 +117,30 @@ export default function EmployeesPage() {
         title="Employees"
         actions={
           can('employee:create') ? (
-            <Button onClick={() => setSelected('new')}>Add employee</Button>
+            <>
+              <Link
+                href="/import"
+                className="inline-flex h-10 items-center rounded-xl border border-border px-4 text-sm font-medium hover:bg-subtle"
+              >
+                Import from Excel / CSV
+              </Link>
+              <Button onClick={() => setSelected('new')}>Add employee</Button>
+            </>
           ) : null
         }
       />
-      <Panel title="People by department" className="mb-5">
-        <DonutChart
-          center={wf.data.headcount}
-          centerSub="people"
+      {wf.isPending || depts.isPending ? (
+        <Skeleton className="mb-5 h-56" />
+      ) : (
+        <BreakdownPanel
+          title="People by department"
+          icon={Users}
+          total={wf.data.headcount}
+          unit="People"
           data={byDept}
           empty="No employees yet."
         />
-      </Panel>
+      )}
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Search">
           {(id) => (
@@ -386,9 +428,9 @@ function CreateForm({ onClose }: { onClose: () => void }) {
 
 function Manage({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   const { can, active } = useAuth();
-  const [tab, setTab] = useState<'details' | 'access' | 'documents' | 'profile' | 'changes' | 'bank' | 'probation' | 'offboard'>(
-    'details',
-  );
+  const [tab, setTab] = useState<
+    'details' | 'access' | 'documents' | 'profile' | 'changes' | 'bank' | 'probation' | 'offboard'
+  >('details');
   const tabs = [
     ['details', true],
     ['access', can('employee:invite') || can('employee:roles')],
@@ -412,13 +454,21 @@ function Manage({ emp, onClose }: { emp: Employee; onClose: () => void }) {
         onChange={setTab}
         tabs={tabs
           .filter(([, ok]) => ok)
-          .map(([k]) => ({ key: k, label: k === 'bank' ? 'Bank & IDs' : k === 'changes' ? 'Role history' : label(k) }))}
+          .map(([k]) => ({
+            key: k,
+            label: k === 'bank' ? 'Bank & IDs' : k === 'changes' ? 'Role history' : label(k),
+          }))}
       />
       {tab === 'details' ? <Details emp={emp} onClose={onClose} /> : null}
       {tab === 'access' ? <Access emp={emp} /> : null}
       {tab === 'documents' ? <Documents emp={emp} /> : null}
       {tab === 'changes' ? <ChangesTab emp={emp} /> : null}
-      {tab === 'profile' ? <ProfileItems employeeId={emp.id} canVerify={can('employee:update') && active?.employeeId !== emp.id} /> : null}
+      {tab === 'profile' ? (
+        <ProfileItems
+          employeeId={emp.id}
+          canVerify={can('employee:update') && active?.employeeId !== emp.id}
+        />
+      ) : null}
       {tab === 'bank' ? <BankIds emp={emp} /> : null}
       {tab === 'probation' ? <Probation emp={emp} onClose={onClose} /> : null}
       {tab === 'offboard' ? <Offboard emp={emp} onClose={onClose} /> : null}
@@ -657,6 +707,7 @@ function Access({ emp }: { emp: Employee }) {
           </Button>
         ) : null}
       </div>
+      {can('employee:roles', 'role:manage') ? <CustomRoles employeeId={emp.id} /> : null}
     </div>
   );
 }
@@ -1009,7 +1060,8 @@ function Documents({ emp }: { emp: Employee }) {
             <span className="min-w-0">
               <span className="block truncate font-medium">{d.title}</span>
               <span className="text-xs text-muted">
-                {d.referenceNo ? `${d.referenceNo} · ` : ''}{label(d.category)} · {(d.sizeBytes / 1024).toFixed(0)} KB ·{' '}
+                {d.referenceNo ? `${d.referenceNo} · ` : ''}
+                {label(d.category)} · {(d.sizeBytes / 1024).toFixed(0)} KB ·{' '}
                 {d.visibleToEmployee ? 'Visible to employee' : 'HR only'}
               </span>
             </span>

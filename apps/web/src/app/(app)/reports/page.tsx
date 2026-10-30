@@ -1,9 +1,9 @@
 'use client';
-import { Download } from 'lucide-react';
+import { ExportButtons } from '@/components/export-buttons';
+import type { ExportFormat } from '@/lib/export';
 import { useState } from 'react';
 import { Pager } from '@/components/pager';
 import { PageTop } from '@/components/page-top';
-import { Button } from '@/components/ui/button';
 import { Alert, Card, Empty, Skeleton, Table, Td, Th } from '@/components/ui/display';
 import { Field, Input, Select } from '@/components/ui/form';
 import { useList } from '@/hooks/api';
@@ -22,7 +22,6 @@ export default function ReportsPage() {
   const [to, setTo] = useState<string>();
   const [departmentId, setDepartmentId] = useState('');
   const [page, setPage] = useState(1);
-  const [exporting, setExporting] = useState<string>();
   const [exportError, setExportError] = useState<string>();
   const depts = useDepartments();
 
@@ -35,8 +34,7 @@ export default function ReportsPage() {
     !!start && !!end,
   );
 
-  async function download(type: 'summary' | 'daily') {
-    setExporting(type);
+  async function download(type: 'summary' | 'daily', format: ExportFormat) {
     setExportError(undefined);
     try {
       const { blob, filename } = await api.download('/reports/attendance/export', {
@@ -44,6 +42,7 @@ export default function ReportsPage() {
         to: end,
         departmentId,
         type,
+        format,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -55,8 +54,6 @@ export default function ReportsPage() {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     } catch (e) {
       setExportError(userMessage(e));
-    } finally {
-      setExporting(undefined);
     }
   }
 
@@ -92,7 +89,7 @@ export default function ReportsPage() {
         ]}
         guide={[
           'Pick a date range (up to 93 days) and optionally a department. The table lists one row per person.',
-          'Summary CSV downloads one row per person. Daily CSV downloads one row per person per day.',
+          'Summary downloads one row per person. Daily downloads one row per person per day. Each comes as CSV or Excel.',
           'Today is left out of the default range because it is still in progress.',
           'Every export is recorded in the audit log.',
         ]}
@@ -101,20 +98,8 @@ export default function ReportsPage() {
         description="Attendance totals per employee. Range up to 93 days. Every export is recorded in the audit log."
         actions={
           <>
-            <Button
-              variant="secondary"
-              loading={exporting === 'summary'}
-              onClick={() => void download('summary')}
-            >
-              <Download className="h-4 w-4" /> Summary CSV
-            </Button>
-            <Button
-              variant="secondary"
-              loading={exporting === 'daily'}
-              onClick={() => void download('daily')}
-            >
-              <Download className="h-4 w-4" /> Daily CSV
-            </Button>
+            <ExportButtons size="md" prefix="Summary" onExport={(f) => download('summary', f)} />
+            <ExportButtons size="md" prefix="Daily" onExport={(f) => download('daily', f)} />
           </>
         }
       />

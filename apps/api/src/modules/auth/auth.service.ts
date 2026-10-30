@@ -18,6 +18,7 @@ import {
   verifyPassword,
 } from '../../utils/security';
 import { sendEmail } from '../notifications/email.service';
+import { loadExtraPermissions } from './customRoles';
 import { permissionsFor } from './permissions';
 import { consumeOneTimeToken, issueOneTimeToken } from './token.service';
 
@@ -57,10 +58,16 @@ async function createSession(
 export async function listMemberships(userId: Types.ObjectId) {
   const memberships = await Membership.find({ userId, status: 'ACTIVE' }).lean();
   const tenants = await Tenant.find({ _id: { $in: memberships.map((m) => m.tenantId) } })
-    .select('name slug status modules')
+    .select('name slug status modules dbName')
     .lean();
-  return memberships.map((m) => {
+  return Promise.all(memberships.map(async (m) => {
     const t = tenants.find((x) => String(x._id) === String(m.tenantId));
+    const extra = await loadExtraPermissions(
+      t?.dbName ?? undefined,
+      m.tenantId,
+      m.customRoleIds,
+      t?.modules,
+    );
     return {
       tenantId: String(m.tenantId),
       tenantName: t?.name,
@@ -68,7 +75,7 @@ export async function listMemberships(userId: Types.ObjectId) {
       tenantStatus: t?.status,
       roles: m.roles,
       // For hiding UI the person cannot use. Cosmetic only: the server re-checks every request.
-      permissions: [...permissionsFor(m.roles)]
+      permissions: [...new Set([...permissionsFor(m.roles), ...extra])]
         .filter((p) => {
           const mod = moduleForPermission(p);
           return !mod || enabledModules(t?.modules).includes(mod);
@@ -77,7 +84,7 @@ export async function listMemberships(userId: Types.ObjectId) {
       modules: enabledModules(t?.modules),
       employeeId: m.employeeId ? String(m.employeeId) : undefined,
     };
-  });
+  }));
 }
 
 export async function login(

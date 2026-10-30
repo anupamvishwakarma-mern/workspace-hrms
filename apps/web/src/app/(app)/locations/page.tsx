@@ -1,6 +1,8 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { MapPin } from 'lucide-react';
 import { PageTop } from '@/components/page-top';
+import { BreakdownPanel } from '../dashboard/charts';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -65,6 +67,19 @@ export default function LocationsPage() {
         description="Geofences used to check office punches. A phone’s location is a signal, not proof of presence."
         actions={<Button onClick={() => setEditing('new')}>Add location</Button>}
       />
+      {q.data ? (
+        <BreakdownPanel
+          title="Locations by status"
+          icon={MapPin}
+          unit="Locations"
+          data={Object.entries(
+            q.data.data.reduce<Record<string, number>>(
+              (m, l) => ({ ...m, [l.status]: (m[l.status] ?? 0) + 1 }),
+              {},
+            ),
+          ).map(([name, value]) => ({ name: label(name), value }))}
+        />
+      ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!q.data ? (
         q.isError ? null : (

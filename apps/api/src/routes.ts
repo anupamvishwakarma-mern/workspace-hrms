@@ -12,6 +12,8 @@ import { registerStatutoryRoutes } from './modules/payroll/statutory.routes';
 import { registerPayrollRoutes } from './modules/payroll/payroll.routes';
 import { registerTeamRoutes } from './modules/team/team.routes';
 import { registerManualAttendanceRoutes } from './modules/attendance/manual.routes';
+import { registerResignationRoutes } from './modules/exit/resignation.routes';
+import { registerImportRoutes } from './modules/imports/imports.routes';
 import { registerWfhRoutes } from './modules/attendance/wfh.routes';
 import { registerLeaveLedgerRoutes } from './modules/leave/ledger.routes';
 import { registerLeaveRoutes } from './modules/leave/leave.routes';
@@ -21,6 +23,7 @@ import { registerInsightRoutes } from './modules/reports/insights.routes';
 import { registerLeaveInsightRoutes } from './modules/reports/leaveInsights.routes';
 import { registerShiftRoutes } from './modules/shifts/shifts.routes';
 import { registerAuthRoutes } from './modules/auth/auth.routes';
+import { registerRoleRoutes } from './modules/roles/roles.routes';
 import { registerRecruitmentRoutes } from './modules/recruitment/recruitment.routes';
 import { registerDesignationRoutes } from './modules/designations/designations.routes';
 import { registerDepartmentRoutes } from './modules/departments/departments.routes';
@@ -45,6 +48,7 @@ export function createV1Router(env: Env, deps: { clock: Clock }): Router {
   registerRecruitmentRoutes(v1, env);
   registerApprovalRoutes(v1, env);
   registerEmployeeRoutes(v1, env);
+  registerRoleRoutes(v1, env);
   registerSensitiveRoutes(v1, env);
   registerChangeRoutes(v1, env);
   registerProfileRoutes(v1, env);
@@ -59,7 +63,9 @@ export function createV1Router(env: Env, deps: { clock: Clock }): Router {
   registerDocumentRoutes(v1, env);
   registerNotificationRoutes(v1, env);
   registerManualAttendanceRoutes(v1, env, deps);
+  registerImportRoutes(v1, env, deps);
   registerWfhRoutes(v1, env, deps);
+  registerResignationRoutes(v1, env, deps);
   registerLeaveLedgerRoutes(v1, env, deps); // before leave routes so /leave/ledger is not read as an id
   registerLeaveRoutes(v1, env, deps);
   registerPayrollRoutes(v1, env, deps);

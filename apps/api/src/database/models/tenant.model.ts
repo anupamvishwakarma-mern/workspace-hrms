@@ -36,6 +36,12 @@ const tenantSchema = new Schema(
         letter: { prefix: { type: String }, padding: { type: Number } },
         document: { prefix: { type: String }, padding: { type: Number } },
       },
+      leave: {
+        /** When true, monthly accrual and year-end carry-forward run on their own. Off by default. */
+        autoAccrual: { type: Boolean, default: false },
+        /** 'YYYY-MM' (company time zone) when automation was switched on. Nothing earlier is processed. */
+        autoSince: { type: String },
+      },
       payroll: {
         /** When true, whoever last generated a run cannot publish it. Off by default. */
         requireSeparatePublisher: { type: Boolean, default: false },

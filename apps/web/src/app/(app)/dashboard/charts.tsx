@@ -16,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import type { LucideIcon } from 'lucide-react';
 import { Card, CardTitle } from '@/components/ui/display';
 import { cn } from '@/lib/utils';
 
@@ -114,8 +115,8 @@ export function DonutChart({
               strokeWidth={2}
               isAnimationActive={false}
             >
-              {rows.map((r, i) => (
-                <Cell key={i} fill={r.color} />
+              {rows.map((r) => (
+                <Cell key={r.name} fill={r.color} />
               ))}
             </Pie>
             <Tooltip contentStyle={tip} />
@@ -129,8 +130,8 @@ export function DonutChart({
         ) : null}
       </div>
       <ul className="min-w-40 flex-1 space-y-1.5 text-sm">
-        {rows.map((r, i) => (
-          <li key={i} className="flex items-center gap-2">
+        {rows.map((r) => (
+          <li key={r.name} className="flex items-center gap-2">
             <span
               aria-hidden
               className="size-2.5 shrink-0 rounded-full"
@@ -346,5 +347,109 @@ export function ActionTile({
       <p className="mt-1 text-sm font-semibold">{title}</p>
       {sub ? <p className="text-xs text-muted">{sub}</p> : null}
     </Link>
+  );
+}
+
+/**
+ * Full-width breakdown: icon + title, a donut with the total in the middle, and one row per slice
+ * (dot, name, count, percent, progress bar). Fills the page width, so use it as the page's main chart.
+ */
+export function BreakdownPanel({
+  title,
+  icon: Icon,
+  data,
+  total,
+  unit = 'total',
+  empty = 'Nothing to show yet.',
+  className,
+}: {
+  title: string;
+  icon?: LucideIcon;
+  data: Slice[];
+  /** Centre number; defaults to the sum of the slices. */
+  total?: ReactNode;
+  unit?: string;
+  empty?: string;
+  className?: string;
+}) {
+  const rows = data
+    .filter((d) => d.value > 0)
+    .map((d, i) => ({ ...d, color: d.color ?? PALETTE[i % PALETTE.length]! }));
+  const sum = rows.reduce((s, r) => s + r.value, 0);
+  return (
+    <Card className={cn('mb-5 p-5', className)}>
+      <div className="mb-4 flex items-center gap-2">
+        {Icon ? (
+          <span
+            aria-hidden
+            className="grid size-8 place-items-center rounded-lg bg-accent text-primary"
+          >
+            <Icon className="size-4" />
+          </span>
+        ) : null}
+        <CardTitle>{title}</CardTitle>
+      </div>
+      {sum === 0 ? (
+        <p className="py-6 text-center text-sm text-muted">{empty}</p>
+      ) : (
+        <div className="grid items-center gap-6 md:grid-cols-[13rem_1fr]">
+          <div
+            className="relative mx-auto size-52"
+            role="img"
+            aria-label={rows.map((r) => `${r.name} ${r.value}`).join(', ')}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={rows}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius="64%"
+                  outerRadius="100%"
+                  paddingAngle={2}
+                  stroke="var(--card)"
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                >
+                  {rows.map((r, i) => (
+                    <Cell key={`${i}-${r.name}`} fill={r.color} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={tip} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span className="text-3xl font-bold tabular-nums">{total ?? sum}</span>
+              <span className="text-xs text-muted">{unit}</span>
+            </div>
+          </div>
+          <ul className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            {rows.map((r, i) => {
+              const pct = Math.round((r.value / sum) * 100);
+              return (
+                <li key={`${i}-${r.name}`} className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span
+                      aria-hidden
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ background: r.color }}
+                    />
+                    <span className="flex-1 truncate">{r.name}</span>
+                    <span className="font-bold tabular-nums">{r.value}</span>
+                    <span className="w-10 text-right text-xs tabular-nums text-muted">{pct}%</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-subtle">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${pct}%`, background: r.color }}
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </Card>
   );
 }

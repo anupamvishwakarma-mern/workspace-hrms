@@ -62,6 +62,8 @@ export const en = {
   'nav.payslips': 'My payslips',
   'nav.profile': 'My profile',
   'nav.org': 'Organisation',
+  'nav.import': 'Bulk import',
+  'nav.roles': 'Roles',
   'let.title': 'Letters',
   'let.desc':
     'Issue offer, experience and other letters from templates. Employees read them in the app.',
@@ -127,6 +129,8 @@ export const hi: Record<Key, string> = {
   'nav.payslips': 'मेरी वेतन पर्चियाँ',
   'nav.profile': 'मेरी प्रोफ़ाइल',
   'nav.org': 'संगठन',
+  'nav.import': 'बल्क इम्पोर्ट',
+  'nav.roles': 'भूमिकाएँ',
   'let.title': 'पत्र',
   'let.desc': 'टेम्पलेट से ऑफ़र, अनुभव और अन्य पत्र जारी करें। कर्मचारी इन्हें ऐप में पढ़ते हैं।',
   'let.issued': 'जारी किए गए पत्र',

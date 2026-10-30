@@ -38,7 +38,7 @@ export function LedgerRuns({ today }: { today: string }) {
     <Card className="space-y-3 p-4">
       <CardTitle>Accrual and year-end</CardTitle>
       <p className="text-sm text-muted">
-        These do not run on their own. Running one again is safe: people already credited are skipped.
+        These run by hand unless the owner switched on automatic leave in Settings. Running one again is safe: people already credited are skipped.
       </p>
       {err ? <Alert tone="danger">{err}</Alert> : null}
       {msg && !err ? <Alert tone="success">{msg}</Alert> : null}

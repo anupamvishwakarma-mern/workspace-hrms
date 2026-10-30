@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { useAuth } from '@/components/auth';
+import { ClipboardList } from 'lucide-react';
 import { PageTop } from '@/components/page-top';
+import { BreakdownPanel } from '../dashboard/charts';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/dialog';
 import { Alert, Badge, Empty, Skeleton, TabBar, statusTone } from '@/components/ui/display';
@@ -55,6 +57,19 @@ export default function RequestsPage() {
           </div>
         }
       />
+      {items.length > 0 ? (
+        <BreakdownPanel
+          title="Requests by type"
+          icon={ClipboardList}
+          unit="Requests"
+          data={Object.entries(
+            items.reduce<Record<string, number>>(
+              (m, r) => ({ ...m, [r.requestType]: (m[r.requestType] ?? 0) + 1 }),
+              {},
+            ),
+          ).map(([name, value]) => ({ name: label(name), value }))}
+        />
+      ) : null}
       <TabBar tabs={tabs} value={scope} onChange={setScope} label="Request lists" />
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {cancel.error ? <Alert tone="danger">{cancel.error}</Alert> : null}
@@ -92,11 +107,22 @@ export default function RequestsPage() {
                     <Badge tone={statusTone(s.status)}>{label(s.status)}</Badge>
                     <span>
                       {s.status === 'SKIPPED'
-                        ? 'No eligible approver (skipped)'
+                        ? s.skippedReason === 'CONDITION'
+                          ? 'Not needed for this request (skipped)'
+                          : 'No eligible approver (skipped)'
                         : s.actedByName
                           ? `${s.actedByName}${s.onBehalfOfName ? ` (for ${s.onBehalfOfName})` : ''}`
                           : s.approverNames.join(' or ')}
                     </span>
+                    {(s.required ?? 1) > 1 ? (
+                      <span className="text-xs text-muted">
+                        {s.approvedCount ?? 0} of {s.required} approved
+                        {s.approvedNames?.length ? ` (${s.approvedNames.join(', ')})` : ''}
+                      </span>
+                    ) : null}
+                    {s.escalatedAt && s.escalatedToNames?.length ? (
+                      <span className="text-xs text-muted">escalated to {s.escalatedToNames.join(', ')}</span>
+                    ) : null}
                     {s.comment ? <span className="text-muted">“{s.comment}”</span> : null}
                   </li>
                 ))}

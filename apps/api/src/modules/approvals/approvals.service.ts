@@ -4,6 +4,7 @@ import { ApprovalWorkflow } from '../../database/models/approvalWorkflow.model';
 import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { Membership } from '../../database/models/membership.model';
 import { AppError } from '../../utils/errors';
+import { conditionMet, type StepCondition } from './conditions';
 
 type Id = Types.ObjectId | string;
 const same = (a?: Id | null, b?: Id | null) => !!a && !!b && String(a) === String(b);
@@ -14,6 +15,18 @@ interface StepDef {
   level?: number | null;
   role?: string | null;
   employeeId?: Id | null;
+  condition?: StepCondition | null;
+  escalation?: (StepDef & { afterHours: number }) | null;
+  mode?: 'ANY' | 'ALL' | 'QUORUM' | null;
+  quorum?: number | null;
+}
+
+/** How many distinct approvals complete a step. Fixed when the request is raised. */
+export function requiredApprovals(mode: string | null | undefined, quorum: number | null | undefined, approvers: number): number {
+  if (approvers <= 1) return 1;
+  if (mode === 'ALL') return approvers;
+  if (mode === 'QUORUM') return Math.max(1, Math.min(quorum ?? approvers, approvers));
+  return 1;
 }
 
 /** Walk up the manager chain (cycle-safe). Returns the employee `level` managers above `employeeId`, or null. */
@@ -122,6 +135,17 @@ export async function submitRequest(
 
   const steps: Record<string, unknown>[] = [];
   for (const [i, s] of wf.steps.entries()) {
+    if (!conditionMet(s.condition as StepCondition | undefined, input.details as Record<string, unknown> | undefined)) {
+      steps.push({
+        order: i,
+        approverType: s.approverType,
+        role: s.role ?? undefined,
+        approverEmployeeIds: [],
+        status: 'SKIPPED',
+        skippedReason: 'CONDITION',
+      });
+      continue;
+    }
     const approvers = await resolveApprovers(actor.tenantId, actor.employeeId, s);
     steps.push({
       order: i,
@@ -129,11 +153,16 @@ export async function submitRequest(
       role: s.role ?? undefined,
       approverEmployeeIds: approvers,
       status: approvers.length ? 'WAITING' : 'SKIPPED',
+      ...(approvers.length ? {} : { skippedReason: 'NO_APPROVER' }),
+      ...(approvers.length && s.escalation ? { escalation: s.escalation } : {}),
+      mode: s.mode ?? 'ANY',
+      required: requiredApprovals(s.mode, s.quorum, approvers.length),
     });
   }
   const first = steps.findIndex((s) => s.status === 'WAITING');
   if (first < 0) throw AppError.unprocessable('No eligible approver is available for this request');
   steps[first]!.status = 'PENDING';
+  steps[first]!.pendingSince = actor.now ?? new Date();
   return ApprovalRequest.create({
     tenantId: actor.tenantId,
     workflowId: wf._id,
@@ -179,6 +208,24 @@ export async function decide(
   if (req.status !== 'PENDING') throw AppError.conflict('Request is already decided');
   const i = req.currentStep;
   const now = new Date();
+  const cur = req.steps[i] as unknown as { required?: number; approvals?: { actedByEmployeeId?: Id; employeeId?: Id }[] };
+  const required = cur?.required ?? 1;
+  const prior = cur?.approvals ?? [];
+  if (
+    decision === 'APPROVE' &&
+    prior.some((p) => same(p.actedByEmployeeId, actor.employeeId) || (auth.onBehalfOf && same(p.employeeId, auth.onBehalfOf)))
+  )
+    throw AppError.conflict('You have already approved this step');
+  // A step that needs several approvals stays open until enough distinct people have approved.
+  const needMore = decision === 'APPROVE' && prior.length + 1 < required;
+  const approval = {
+    employeeId: auth.onBehalfOf ?? actor.employeeId,
+    actedByUserId: actor.userId,
+    actedByEmployeeId: actor.employeeId,
+    ...(auth.onBehalfOf ? { onBehalfOfEmployeeId: auth.onBehalfOf } : {}),
+    at: now,
+    ...(comment ? { comment } : {}),
+  };
   const stepSet = {
     [`steps.${i}.status`]: decision === 'APPROVE' ? 'APPROVED' : 'REJECTED',
     [`steps.${i}.actedByUserId`]: actor.userId,
@@ -188,16 +235,18 @@ export async function decide(
     ...(auth.onBehalfOf ? { [`steps.${i}.onBehalfOfEmployeeId`]: auth.onBehalfOf } : {}),
   };
   let update: Record<string, unknown>;
-  if (decision === 'REJECT') {
+  if (needMore) {
+    update = {};
+  } else if (decision === 'REJECT') {
     update = { ...stepSet, status: 'REJECTED', decidedAt: now };
   } else {
     const next = req.steps.findIndex((s, k) => k > i && s.status === 'WAITING');
     update =
       next < 0
         ? { ...stepSet, status: 'APPROVED', decidedAt: now }
-        : { ...stepSet, currentStep: next, [`steps.${next}.status`]: 'PENDING' };
+        : { ...stepSet, currentStep: next, [`steps.${next}.status`]: 'PENDING', [`steps.${next}.pendingSince`]: now };
   }
-  if (decision === 'APPROVE' && !req.steps.some((s, k) => k > i && s.status === 'WAITING'))
+  if (decision === 'APPROVE' && !needMore && !req.steps.some((s, k) => k > i && s.status === 'WAITING'))
     await hooks.get(req.requestType)?.beforeFinalApprove?.(req as never);
   // Atomic: only the step we read may be decided, and only once.
   const done = await ApprovalRequest.findOneAndUpdate(
@@ -207,8 +256,13 @@ export async function decide(
       status: 'PENDING',
       currentStep: i,
       [`steps.${i}.status`]: 'PENDING',
+      // Two people approving at the same moment: only one write wins the slot, the other is told to reload.
+      ...(required > 1 && decision === 'APPROVE' ? { [`steps.${i}.approvals`]: { $size: prior.length } } : {}),
     },
-    { $set: update },
+    {
+      ...(Object.keys(update).length ? { $set: update } : {}),
+      ...(decision === 'APPROVE' ? { $push: { [`steps.${i}.approvals`]: approval } } : {}),
+    },
     { new: true },
   );
   if (!done) throw AppError.conflict('Request changed; reload and try again');
@@ -240,6 +294,26 @@ export async function inboxFilter(actor: Actor): Promise<Record<string, unknown>
     tenantId: actor.tenantId,
     status: 'PENDING',
     requesterEmployeeId: { $nin: [actor.employeeId] },
+    $and: [
+      // someone who already approved a multi-approver step has nothing left to do on it
+      {
+        $expr: {
+          $not: [
+            {
+              $in: [
+                actor.employeeId,
+                {
+                  $map: {
+                    input: { $ifNull: [{ $arrayElemAt: ['$steps.approvals', '$currentStep'] }, []] },
+                    in: '$$this.actedByEmployeeId',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
     $expr: {
       $gt: [
         {
@@ -269,4 +343,61 @@ export async function ensureWorkflow(tenantId: Id, requestType: string, name: st
       if (!(e && (e as { code?: number }).code === 11000)) throw e; // someone else just created it: fine
     },
   );
+}
+
+/**
+ * Escalation of overdue steps. For every PENDING request whose current step has an escalation rule and has been
+ * waiting longer than `afterHours`, the rule's approvers are ADDED to the step (the original approvers keep their
+ * right to act). Happens at most once per step. Safe to run any number of times and in any order.
+ * Returns the people who just became approvers so the caller can notify them.
+ */
+export async function escalateOverdue(
+  tenantId: Id,
+  now: Date,
+  limit = 500,
+): Promise<{ escalated: number; notify: { employeeId: Id; requestId: Id; title: string }[] }> {
+  const candidates = await ApprovalRequest.find({
+    tenantId,
+    status: 'PENDING',
+    steps: { $elemMatch: { status: 'PENDING', 'escalation.afterHours': { $gt: 0 }, escalatedAt: null } },
+  })
+    .limit(limit)
+    .lean();
+  let escalated = 0;
+  const notify: { employeeId: Id; requestId: Id; title: string }[] = [];
+  for (const r of candidates) {
+    const i = r.currentStep;
+    const step = r.steps[i] as
+      | (typeof r.steps)[number] & {
+          escalation?: { afterHours: number; approverType: string; level?: number; role?: string; employeeId?: Id };
+          pendingSince?: Date;
+          escalatedAt?: Date;
+        }
+      | undefined;
+    if (!step || step.status !== 'PENDING' || !step.escalation || step.escalatedAt || !step.pendingSince) continue;
+    if (now.getTime() - step.pendingSince.getTime() < step.escalation.afterHours * 3_600_000) continue;
+    const current = new Set((step.approverEmployeeIds ?? []).map(String));
+    const fresh = (await resolveApprovers(tenantId, r.requesterEmployeeId, step.escalation)).filter(
+      (a) => !current.has(String(a)),
+    );
+    const done = await ApprovalRequest.findOneAndUpdate(
+      {
+        _id: r._id,
+        tenantId,
+        status: 'PENDING',
+        currentStep: i,
+        [`steps.${i}.status`]: 'PENDING',
+        [`steps.${i}.escalatedAt`]: null,
+      },
+      {
+        $set: { [`steps.${i}.escalatedAt`]: now, [`steps.${i}.escalatedToEmployeeIds`]: fresh },
+        ...(fresh.length ? { $addToSet: { [`steps.${i}.approverEmployeeIds`]: { $each: fresh } } } : {}),
+      },
+      { new: true },
+    );
+    if (!done) continue; // decided or escalated by someone else in the meantime
+    escalated += 1;
+    for (const f of fresh) notify.push({ employeeId: f, requestId: r._id, title: r.title });
+  }
+  return { escalated, notify };
 }

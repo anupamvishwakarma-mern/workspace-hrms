@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { PageTop } from '@/components/page-top';
-import { DonutChart, Panel } from '../dashboard/charts';
+import { FileText } from 'lucide-react';
+import { BreakdownPanel } from '../dashboard/charts';
 import { Pager } from '@/components/pager';
 import { Alert, Empty, Skeleton, Table, Td, Th } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/form';
@@ -49,16 +50,17 @@ export default function AuditPage() {
         description="Who changed what, newest first. Passwords, tokens and coordinates are never recorded."
       />
       {q.data && q.data.data.length > 0 ? (
-        <Panel title="What changed" sub="By area, on this page" className="mb-5">
-          <DonutChart
-            data={Object.entries(
-              q.data.data.reduce<Record<string, number>>((m, e) => {
-                const k = e.action.split('.')[0] ?? 'other';
-                return { ...m, [k]: (m[k] ?? 0) + 1 };
-              }, {}),
-            ).map(([name, value]) => ({ name, value }))}
-          />
-        </Panel>
+        <BreakdownPanel
+          title="What changed (by area, on this page)"
+          icon={FileText}
+          unit="Entries"
+          data={Object.entries(
+            q.data.data.reduce<Record<string, number>>((m, e) => {
+              const k = e.action.split('.')[0] ?? 'other';
+              return { ...m, [k]: (m[k] ?? 0) + 1 };
+            }, {}),
+          ).map(([name, value]) => ({ name, value }))}
+        />
       ) : null}
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <Field label="Action">

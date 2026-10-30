@@ -1,6 +1,6 @@
 # Configurable roles and permissions: design (not yet built)
 
-Status: decisions agreed (see "Agreed answers"). Build step 1 is done; steps 2 to 5 are not. It exists so the decisions below can be agreed before touching access control, which every endpoint depends on.
+Status: decisions agreed (see "Agreed answers"). All five build steps are written. The web screens are checked in the cloud only (type-check, build), not in a browser. It exists so the decisions below can be agreed before touching access control, which every endpoint depends on.
 
 ## Goal
 
@@ -30,10 +30,10 @@ A company owner can create their own roles (for example "Recruiter", "Payroll re
 ## Build order (each step shippable and tested on its own)
 
 1. DONE: mechanical refactor. `hasPermission` takes the tenant context (a bare roles array still works), `requirePermission` passes the context, and the context type has an optional `extraPermissions` set. No behaviour change; the existing tests are the safety net.
-2. `CustomRole` model, `customRoleIds` on `Membership`, resolution in `resolveTenant`, `/auth/me`.
-3. Owner-only CRUD routes plus assignment, with the whitelist, limits, audit and 409 on deleting a role in use.
-4. Tests: tenant isolation (company A cannot see or use company B's roles), no escalation (HR cannot create or assign), locked permissions rejected, module gating, effect without re-login, authz-matrix extended.
-5. Web: Settings > Roles (list, create/edit with grouped permission checkboxes, assign from the employee dialog).
+2. DONE: `CustomRole` model, `customRoleIds` on `Membership`, resolution in `resolveTenant` and in login / `/auth/me`, the lock list and module filtering (`modules/auth/customRoles.ts`), new owner-only `role:manage` permission. No way to create a role yet (that is step 3).
+3. DONE: owner-only CRUD routes plus assignment, with the whitelist, limits, audit and 409 on deleting a role in use.
+4. DONE (`tests/roles.test.ts`): tenant isolation (company A cannot see or use company B's roles), no escalation (HR cannot create or assign), locked permissions rejected, module gating, effect without re-login, authz-matrix extended.
+5. DONE: web. A Roles page (owner only, under Company setup) and a Company roles picker in the employee Access tab. Settings > Roles (list, create/edit with grouped permission checkboxes, assign from the employee dialog).
 
 ## Agreed answers
 

@@ -35,6 +35,18 @@ export interface Employee {
   joiningDate?: string;
   lastWorkingDate?: string;
 }
+export interface CustomRole {
+  id: string;
+  name: string;
+  description: string | null;
+  permissions: string[];
+  assignedCount?: number;
+}
+export interface GrantablePermission {
+  permission: string;
+  area: string;
+  module: string | null;
+}
 export interface Designation {
   id: string;
   title: string;
@@ -112,6 +124,7 @@ export interface Tenant {
       maxOpenSessionHours?: number;
     };
     payroll?: { requireSeparatePublisher?: boolean };
+    leave?: { autoAccrual?: boolean; autoSince?: string };
   };
   modules?: string[];
   numbering?: {
@@ -364,6 +377,45 @@ export interface PlatformTenant {
   status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
   maxEmployees?: number;
   modules: string[];
+  planId?: string;
+  timezone?: string;
+  createdAt?: string;
+  headcount?: number;
+}
+export interface PlatformMetrics {
+  companies: number;
+  tenantsByStatus: Record<string, number>;
+  activeUsers: number;
+  activeMemberships: number;
+  people: number;
+  seatsSold: number;
+  moduleAdoption: Record<string, number>;
+  signupsByMonth: { month: string; count: number }[];
+  recentCompanies: { id: string; name: string; status: string; createdAt: string }[];
+  nearSeatLimit: { id: string; name: string; headcount: number; maxEmployees: number }[];
+  suspended: { id: string; name: string }[];
+}
+export interface PlatformCompanyDetail {
+  company: PlatformTenant;
+  owners: { userId: string; email?: string; userStatus?: string; lastLoginAt?: string; membershipStatus: string }[];
+  activity: { id: string; action: string; reason?: string; by?: string; at: string }[];
+}
+export interface PlatformOwner {
+  userId: string;
+  email: string;
+  userStatus: string;
+  membershipStatus: string;
+  lastLoginAt?: string;
+  companyId: string;
+  companyName: string;
+  companyStatus: string;
+}
+export interface PlatformAdmin {
+  id: string;
+  email: string;
+  status: string;
+  lastLoginAt?: string;
+  createdAt: string;
 }
 export interface StatutoryRule {
   id: string;
@@ -583,6 +635,13 @@ export interface ApprovalStep {
   approverType: 'MANAGER' | 'ROLE' | 'EMPLOYEE';
   role?: string;
   status: 'WAITING' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'SKIPPED';
+  skippedReason?: 'NO_APPROVER' | 'CONDITION';
+  mode?: 'ANY' | 'ALL' | 'QUORUM';
+  required?: number;
+  approvedCount?: number;
+  approvedNames?: string[];
+  escalatedAt?: string;
+  escalatedToNames?: string[];
   approverNames: string[];
   actedByName?: string;
   onBehalfOfName?: string;
@@ -607,6 +666,10 @@ export interface ApprovalWorkflowStep {
   level?: number;
   role?: string;
   employeeId?: string;
+  mode?: 'ANY' | 'ALL' | 'QUORUM';
+  quorum?: number;
+  escalation?: { afterHours: number; approverType: 'MANAGER' | 'ROLE' | 'EMPLOYEE'; level?: number; role?: string; employeeId?: string };
+  condition?: { field: string; op: 'GT' | 'GTE' | 'LT' | 'LTE' | 'EQ' | 'NE'; value: string | number | boolean };
 }
 export interface ApprovalWorkflow {
   id: string;

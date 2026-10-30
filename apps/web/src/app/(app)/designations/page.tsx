@@ -1,6 +1,8 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Briefcase } from 'lucide-react';
 import { PageTop } from '@/components/page-top';
+import { BreakdownPanel } from '../dashboard/charts';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -54,6 +56,19 @@ export default function DesignationsPage() {
         title="Designations"
         actions={<Button onClick={() => setEditing('new')}>Add designation</Button>}
       />
+      {q.data ? (
+        <BreakdownPanel
+          title="Designations by status"
+          icon={Briefcase}
+          unit="Designations"
+          data={Object.entries(
+            items.reduce<Record<string, number>>(
+              (m, d) => ({ ...m, [d.status]: (m[d.status] ?? 0) + 1 }),
+              {},
+            ),
+          ).map(([name, value]) => ({ name: label(name), value }))}
+        />
+      ) : null}
       {q.isError ? <Alert tone="danger">{userMessage(q.error)}</Alert> : null}
       {!q.data ? (
         q.isError ? null : (

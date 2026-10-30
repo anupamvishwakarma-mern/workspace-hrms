@@ -14,6 +14,8 @@ const membershipSchema = new Schema(
     tenantId: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     roles: { type: [{ type: String, enum: TENANT_ROLES }], default: ['EMPLOYEE'] },
+    /** Company-defined roles (see CustomRole). Only add permissions; built-in `roles` are unaffected. */
+    customRoleIds: { type: [Schema.Types.ObjectId], default: [] },
     employeeId: { type: Schema.Types.ObjectId, ref: 'Employee' },
     status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
   },
