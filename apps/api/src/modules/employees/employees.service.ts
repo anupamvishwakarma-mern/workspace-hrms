@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { formatNumber, numberingFor } from '../tenants/numbering';
 import { isDuplicateKey } from '../../utils/mongo';
 import type { Request } from 'express';
 import type { Env } from '../../config/env';
@@ -274,10 +275,11 @@ export async function createEmployee(
       history: [{ type: 'CREATED', to: 'INVITED', byUserId: actorId }],
     });
   if (input.employeeCode) return create(input.employeeCode);
+  const rule = (await numberingFor(tenantId)).employee;
   // Generated codes can collide with codes that were typed in by hand or imported (e.g. EMP-0001).
   // Skip taken codes rather than failing the request; the unique index stays the source of truth.
   for (let attempt = 0; ; attempt++) {
-    const code = `EMP-${String(await nextSequence(`employee:${tenantId}`)).padStart(4, '0')}`;
+    const code = formatNumber(rule, await nextSequence(`employee:${tenantId}`));
     try {
       return await create(code);
     } catch (e) {

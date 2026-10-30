@@ -4,6 +4,7 @@ import { useAuth } from '@/components/auth';
 import { Alert, Skeleton } from '@/components/ui/display';
 import { ViewSwitcher, type ViewKey } from '../attendance/shared';
 import { EmployeeDashboard } from './employee';
+import { CoreDashboard } from './core';
 import { HrDashboard } from './hr';
 import { ManagerDashboard } from './manager';
 import { OwnerDashboard } from './owner';
@@ -24,15 +25,18 @@ const readPref = (): ViewKey | null => {
  * Manager (their team) and Employee (own day). People allowed several can switch between them.
  */
 export default function DashboardPage() {
-  const { can, active, status } = useAuth();
+  const { can, active, status, hasModule } = useAuth();
   const [picked, setPicked] = useState<ViewKey | null>(null);
   if (status !== 'ready' || !active) return <Skeleton className="h-96" />;
 
+  const full = hasModule('ATTENDANCE') && hasModule('LEAVE');
+  const staff = can('employee:read:all', 'employee:read:team');
   const allowed: Record<ViewKey, boolean> = {
     employee: can('attendance:read:self', 'leave:apply') && !!active.employeeId,
-    manager: can('attendance:read:team') && !can('attendance:read:all'),
-    hr: can('attendance:review:all') || can('leave:review:all'),
-    owner: active.roles.includes('COMPANY_OWNER') && can('attendance:read:all'),
+    // The richer dashboards are built on attendance and leave; without both, staff get the company overview.
+    manager: full && can('attendance:read:team') && !can('attendance:read:all'),
+    hr: full ? can('attendance:review:all') || can('leave:review:all') : staff,
+    owner: full && active.roles.includes('COMPANY_OWNER') && can('attendance:read:all'),
   };
   const views = ORDER.filter((v) => allowed[v]);
   const stored = picked ?? readPref();
@@ -60,7 +64,7 @@ export default function DashboardPage() {
   return view === 'owner' ? (
     <OwnerDashboard switcher={switcher} />
   ) : view === 'hr' ? (
-    <HrDashboard switcher={switcher} />
+    full ? <HrDashboard switcher={switcher} /> : <CoreDashboard switcher={switcher} />
   ) : view === 'manager' ? (
     <ManagerDashboard switcher={switcher} />
   ) : (

@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { enabledModules, moduleForPermission } from '../tenants/modules';
 import type { Env } from '../../config/env';
 import { Employee } from '../../database/models/employee.model';
 import { runInTenant } from '../../database/tenantDb';
@@ -56,7 +57,7 @@ async function createSession(
 export async function listMemberships(userId: Types.ObjectId) {
   const memberships = await Membership.find({ userId, status: 'ACTIVE' }).lean();
   const tenants = await Tenant.find({ _id: { $in: memberships.map((m) => m.tenantId) } })
-    .select('name slug status')
+    .select('name slug status modules')
     .lean();
   return memberships.map((m) => {
     const t = tenants.find((x) => String(x._id) === String(m.tenantId));
@@ -67,7 +68,13 @@ export async function listMemberships(userId: Types.ObjectId) {
       tenantStatus: t?.status,
       roles: m.roles,
       // For hiding UI the person cannot use. Cosmetic only: the server re-checks every request.
-      permissions: [...permissionsFor(m.roles)].sort(),
+      permissions: [...permissionsFor(m.roles)]
+        .filter((p) => {
+          const mod = moduleForPermission(p);
+          return !mod || enabledModules(t?.modules).includes(mod);
+        })
+        .sort(),
+      modules: enabledModules(t?.modules),
       employeeId: m.employeeId ? String(m.employeeId) : undefined,
     };
   });

@@ -17,8 +17,10 @@ import { componentAmountMinor, formatMoney } from '@/lib/money';
 import type { Employee, PayComponent, PayrollRun, SalaryStructure } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import { DateTime } from 'luxon';
+import { PayslipView } from './payslip-view';
+import { Adjustments, Rules } from './rules-admin';
 
-type Tab = 'runs' | 'structures';
+type Tab = 'runs' | 'structures' | 'rules' | 'adjustments';
 
 export default function PayrollPage() {
   const { t } = useI18n();
@@ -38,9 +40,19 @@ export default function PayrollPage() {
         tabs={[
           { key: 'runs', label: t('pay.runs') },
           { key: 'structures', label: t('pay.structures') },
+          { key: 'rules', label: t('pay.rules') },
+          { key: 'adjustments', label: t('pay.adjustments') },
         ]}
       />
-      {tab === 'runs' ? <Runs /> : <Structures />}
+      {tab === 'runs' ? (
+        <Runs />
+      ) : tab === 'structures' ? (
+        <Structures />
+      ) : tab === 'rules' ? (
+        <Rules />
+      ) : (
+        <Adjustments />
+      )}
     </>
   );
 }
@@ -184,6 +196,7 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
     ['payroll-runs', 'payroll-run'],
     () => undefined,
   );
+  const [slip, setSlip] = useState<string>();
   const run = q.data?.data;
   const blocked = run?.payslips?.some((p) => p.warnings.includes('NEGATIVE_NET'));
   return (
@@ -231,7 +244,11 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
                 <Th>Employee</Th>
                 <Th>Gross</Th>
                 <Th>Net</Th>
+                <Th>Employer cost</Th>
                 <Th>Notes</Th>
+                <Th>
+                  <span className="sr-only">Actions</span>
+                </Th>
               </tr>
             </thead>
             <tbody>
@@ -243,6 +260,7 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
                   </Td>
                   <Td>{formatMoney(p.grossMinor, p.currency)}</Td>
                   <Td className="font-semibold">{formatMoney(p.netMinor, p.currency)}</Td>
+                  <Td>{formatMoney(p.employerMinor ?? 0, p.currency)}</Td>
                   <Td>
                     {p.warnings.map((w) => (
                       <span key={w} className="block text-xs text-warn">
@@ -250,10 +268,16 @@ function RunDetail({ id, onClose }: { id: string; onClose: () => void }) {
                       </span>
                     ))}
                   </Td>
+                  <Td>
+                    <Button size="sm" variant="secondary" onClick={() => setSlip(p.id)}>
+                      View
+                    </Button>
+                  </Td>
                 </tr>
               ))}
             </tbody>
           </Table>
+          {slip ? <PayslipView id={slip} onClose={() => setSlip(undefined)} /> : null}
           {run.status === 'DRAFT' ? (
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-muted">

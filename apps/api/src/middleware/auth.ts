@@ -8,6 +8,7 @@ import { Session } from '../database/models/session.model';
 import { Tenant } from '../database/models/tenant.model';
 import { User } from '../database/models/user.model';
 import { hasPermission, type Permission } from '../modules/auth/permissions';
+import { enabledModules, moduleForPath, MODULES } from '../modules/tenants/modules';
 import { AppError } from '../utils/errors';
 
 export const JWT_ISSUER = 'workforce-hrms';
@@ -95,8 +96,16 @@ export const resolveTenant: RequestHandler = async (req, _res, next) => {
       throw AppError.badRequest('Multiple companies available; set the X-Tenant-Id header');
     }
     if (!chosen) throw AppError.forbidden();
-    const tenant = await Tenant.findById(chosen.tenantId).select('status dbName').lean();
+    const tenant = await Tenant.findById(chosen.tenantId).select('status dbName modules').lean();
     if (!tenant || tenant.status !== 'ACTIVE') throw AppError.forbidden('Company is not active');
+    // Limited-access companies: refuse routes that belong to a module the platform admin switched off.
+    const needed = moduleForPath(req.originalUrl.split('?')[0]!.split('/').slice(3));
+    if (needed && !enabledModules(tenant.modules).includes(needed))
+      throw new AppError(
+        403,
+        'MODULE_NOT_ENABLED',
+        `${MODULES[needed].label} is not enabled for this company. Contact your platform administrator.`,
+      );
     req.tenantCtx = {
       tenantId: chosen.tenantId,
       roles: chosen.roles,

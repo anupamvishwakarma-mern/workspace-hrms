@@ -38,6 +38,7 @@ export type Permission =
   | 'employee:sensitive:read' // masked bank/statutory data of others; full values are audited
   | 'employee:sensitive:update'
   | 'employee:confirm' // confirm an employee after probation
+  | 'employee:change' // record promotions, transfers and salary revisions
   | 'audit:read'
   | 'leave:apply' // own requests and balances
   | 'leave:read:all'
@@ -53,7 +54,9 @@ export type Permission =
   | 'letter:read:self' // letters issued to me
   | 'letter:manage' // templates and issuing letters
   | 'handbook:read' // published handbook sections
-  | 'handbook:manage'; // write the handbook
+  | 'handbook:manage' // write the handbook
+  | 'recruitment:manage' // jobs, candidates, offers, hiring
+  | 'recruitment:feedback'; // see own interviews and submit feedback
 
 const COMMON: Permission[] = [
   'attendance:punch',
@@ -94,6 +97,7 @@ const HR_PERMS: Permission[] = [
   'holiday:manage',
   'employee:reactivate',
   'employee:confirm',
+  'employee:change',
   'employee:sensitive:read',
   'employee:sensitive:update',
   'audit:read',
@@ -106,6 +110,8 @@ const HR_PERMS: Permission[] = [
   'letter:manage',
   'handbook:manage',
   'approval:manage',
+  'recruitment:manage',
+  'recruitment:feedback',
 ];
 
 export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
@@ -124,6 +130,7 @@ export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
     'attendance:review:team',
     'leave:read:team',
     'leave:review:team',
+    'recruitment:feedback',
   ],
   EMPLOYEE: [
     'tenant:read',

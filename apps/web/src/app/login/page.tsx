@@ -29,7 +29,7 @@ export default function LoginPage() {
   } = useForm<Form>({ resolver: zodResolver(schema) });
 
   useEffect(() => {
-    if (status === 'ready') router.replace('/dashboard');
+    if (status === 'ready' || status === 'platform') router.replace('/dashboard');
   }, [status, router]);
 
   if (status === 'needsCompany')

@@ -1,4 +1,5 @@
 import type { Request, Router } from 'express';
+import { formatNumber, numberingFor } from '../tenants/numbering';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
 import { Department } from '../../database/models/department.model';
@@ -246,7 +247,7 @@ export function registerLetterRoutes(v1: Router, env: Env, deps: { clock: Clock 
         tenantId: ctx.tenantId,
         employeeId: emp._id,
         templateId: b.templateId,
-        referenceNo: `LTR-${year}-${String(seq).padStart(4, '0')}`,
+        referenceNo: formatNumber((await numberingFor(ctx.tenantId)).letter, seq, `${year}-`),
         title,
         category,
         body: text,

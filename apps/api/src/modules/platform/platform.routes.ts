@@ -14,9 +14,17 @@ import { runInTenantDb } from '../../database/tenantContext';
 import { runInTenant } from '../../database/tenantDb';
 import { MAX_MEMBERS, onboardBody, provisionTenant } from '../tenants/provisioning';
 import { serializeTenant } from '../tenants/tenants.routes';
+import { MODULES, MODULE_DEPENDENCIES, MODULE_KEYS, checkModuleSet, enabledModules } from '../tenants/modules';
 
+const moduleList = z.array(z.enum(MODULE_KEYS as [string, ...string[]])).max(MODULE_KEYS.length);
+const modulesBody = z
+  .object({ modules: moduleList, reason: z.string().trim().min(3).max(500) })
+  .strict();
 const createBody = onboardBody
-  .extend({ maxEmployees: z.number().int().min(1).max(MAX_MEMBERS).optional() })
+  .extend({
+    maxEmployees: z.number().int().min(1).max(MAX_MEMBERS).optional(),
+    modules: moduleList.optional(),
+  })
   .strict();
 const seatsBody = z
   .object({ maxEmployees: z.number().int().min(1).max(MAX_MEMBERS) })
@@ -52,11 +60,13 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
     ...chain,
     validate({ body: createBody }),
     asyncHandler(async (req, res) => {
-      const out = await provisionTenant(
-        env,
-        req.body as z.infer<typeof createBody>,
-        { createdByUserId: req.auth!.userId },
-      );
+      const { modules, ...onboard } = req.body as z.infer<typeof createBody>;
+      if (modules) {
+        const bad = checkModuleSet(modules);
+        if (bad) throw AppError.unprocessable(bad);
+      }
+      const out = await provisionTenant(env, onboard as never, { createdByUserId: req.auth!.userId });
+      if (modules) await Tenant.updateOne({ _id: out.tenantId }, { $set: { modules: [...new Set(modules)] } });
       const tenant = await Tenant.findById(out.tenantId).lean();
       await runInTenantDb(out.dbName, () =>
         writeAudit(req, {
@@ -172,6 +182,65 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
           tenantId: before._id,
           before: { maxEmployees: before.maxEmployees },
           after: { maxEmployees },
+        }),
+      );
+      res.json({ success: true, data: serializeTenant(after!) });
+    }),
+  );
+
+  route(
+    v1,
+    {
+      method: 'get',
+      path: '/platform/modules',
+      summary: 'The optional modules a company can be given, with their dependencies.',
+      tags: ['Platform'],
+      auth: 'platform',
+    },
+    ...chain,
+    asyncHandler(async (_req, res) => {
+      res.json({
+        success: true,
+        data: MODULE_KEYS.map((k) => ({
+          key: k,
+          label: MODULES[k].label,
+          description: MODULES[k].description,
+          requires: MODULE_DEPENDENCIES[k] ?? [],
+        })),
+      });
+    }),
+  );
+
+  route(
+    v1,
+    {
+      method: 'patch',
+      path: '/platform/tenants/:id/modules',
+      summary:
+        'Choose which optional modules a company may use. Switched-off modules are refused by the API (403 MODULE_NOT_ENABLED) and hidden in the apps; their data is kept and returns when switched back on.',
+      tags: ['Platform'],
+      auth: 'platform',
+      body: modulesBody,
+    },
+    ...chain,
+    validate({ params: idParams, body: modulesBody }),
+    asyncHandler(async (req, res) => {
+      const before = await Tenant.findById(req.params.id).lean();
+      if (!before) throw AppError.notFound('Company not found');
+      const { modules, reason } = req.body as z.infer<typeof modulesBody>;
+      const next = [...new Set(modules)];
+      const bad = checkModuleSet(next);
+      if (bad) throw AppError.unprocessable(bad);
+      const after = await Tenant.findByIdAndUpdate(before._id, { $set: { modules: next } }, { new: true }).lean();
+      await runInTenantDb(before.dbName ?? undefined, () =>
+        writeAudit(req, {
+          action: 'platform.tenant_modules',
+          entityType: 'Tenant',
+          entityId: before._id,
+          tenantId: before._id,
+          before: { modules: enabledModules(before.modules as string[] | undefined) },
+          after: { modules: next },
+          reason,
         }),
       );
       res.json({ success: true, data: serializeTenant(after!) });

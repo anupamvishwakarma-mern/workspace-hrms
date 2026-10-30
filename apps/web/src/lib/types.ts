@@ -5,6 +5,7 @@ export interface Membership {
   tenantStatus?: string;
   roles: string[];
   permissions: string[];
+  modules?: string[];
   employeeId?: string;
 }
 export type Role = 'COMPANY_OWNER' | 'HR_ADMIN' | 'MANAGER' | 'EMPLOYEE' | 'PAYROLL_ADMIN';
@@ -110,6 +111,12 @@ export interface Tenant {
       requirePhoto?: boolean;
       maxOpenSessionHours?: number;
     };
+    payroll?: { requireSeparatePublisher?: boolean };
+  };
+  modules?: string[];
+  numbering?: {
+    employee: { prefix: string; padding: number };
+    letter: { prefix: string; padding: number };
   };
 }
 export interface DayRow {
@@ -283,7 +290,13 @@ export interface PayrollRun {
   status: 'DRAFT' | 'PUBLISHED';
   generatedAt?: string;
   publishedAt?: string;
-  totals?: { employees: number; grossMinor: number; deductionsMinor: number; netMinor: number };
+  totals?: {
+    employees: number;
+    grossMinor: number;
+    deductionsMinor: number;
+    netMinor: number;
+    employerMinor?: number;
+  };
   skipped: { employeeId: string; name: string; reason: string }[];
   payslips?: PayslipRow[];
 }
@@ -296,7 +309,89 @@ export interface PayslipRow {
   grossMinor: number;
   deductionsMinor: number;
   netMinor: number;
+  employerMinor?: number;
   warnings: string[];
+}
+export interface PayslipDetail extends PayslipRow {
+  status: 'DRAFT' | 'PUBLISHED';
+  publishedAt?: string;
+  attendance?: { daysInMonth?: number; payableDays?: number; lopDays?: number };
+  lines: {
+    code: string;
+    name: string;
+    kind: 'EARNING' | 'DEDUCTION';
+    fullMinor?: number;
+    amountMinor: number;
+    source?: 'STRUCTURE' | 'ADJUSTMENT' | 'STATUTORY';
+  }[];
+  employerLines: { code: string; name: string; wageMinor?: number; amountMinor: number }[];
+}
+export interface EmploymentChange {
+  id: string;
+  employeeId: string;
+  type: 'PROMOTION' | 'TRANSFER' | 'SALARY_REVISION';
+  effectiveDate: string;
+  reason: string;
+  before?: { designation?: string; department?: string; manager?: string; workLocationIds?: string[] };
+  after?: { designation?: string; department?: string; manager?: string; workLocationIds?: string[] };
+}
+export type ProfileKind = 'QUALIFICATION' | 'EXPERIENCE' | 'SKILL' | 'CERTIFICATION';
+export interface ProfileItem {
+  id: string;
+  employeeId: string;
+  kind: ProfileKind;
+  title: string;
+  organization?: string;
+  fromDate?: string;
+  toDate?: string;
+  level?: string;
+  credentialId?: string;
+  notes?: string;
+  verified: boolean;
+}
+export interface PlatformModule {
+  key: string;
+  label: string;
+  description: string;
+  requires: string[];
+}
+export interface PlatformTenant {
+  id: string;
+  name: string;
+  slug: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
+  maxEmployees?: number;
+  modules: string[];
+}
+export interface StatutoryRule {
+  id: string;
+  code: string;
+  name: string;
+  party: 'EMPLOYEE' | 'EMPLOYER';
+  method: 'PERCENT' | 'SLAB' | 'FIXED';
+  wageComponents: string[];
+  percent?: number;
+  wageCeiling?: number;
+  cap?: number;
+  slabs: { from: number; to?: number; amount: number }[];
+  fixed?: number;
+  minWage?: number;
+  maxWage?: number;
+  effectiveFrom: string;
+  effectiveTo?: string;
+  reference?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+}
+export interface PayrollAdjustment {
+  id: string;
+  employeeId: string;
+  month: string;
+  kind: 'EARNING' | 'DEDUCTION';
+  code: string;
+  label: string;
+  amount: number;
+  reason: string;
+  status: 'ACTIVE' | 'VOIDED';
 }
 export type LetterCategory =
   | 'OFFER'

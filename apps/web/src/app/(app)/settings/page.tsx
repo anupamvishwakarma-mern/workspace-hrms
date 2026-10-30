@@ -19,6 +19,11 @@ const schema = z.object({
   workweek: z.array(z.number()).min(1, 'Pick at least one working day'),
   requireGeofence: z.boolean(),
   allowSelfApproval: z.boolean(),
+  requireSeparatePublisher: z.boolean(),
+  empPrefix: z.string().trim().regex(/^[A-Za-z0-9\-_/]{0,10}$/, 'Up to 10 letters, digits, - _ or /'),
+  empPadding: z.coerce.number().int().min(1, 'Min 1').max(8, 'Max 8'),
+  ltrPrefix: z.string().trim().regex(/^[A-Za-z0-9\-_/]{0,10}$/, 'Up to 10 letters, digits, - _ or /'),
+  ltrPadding: z.coerce.number().int().min(1, 'Min 1').max(8, 'Max 8'),
   allowGpsExceptions: z.boolean(),
   requirePhoto: z.boolean(),
   maxAccuracyMeters: z.coerce.number().int().min(5, 'Min 5').max(500, 'Max 500'),
@@ -43,12 +48,18 @@ export default function SettingsPage() {
       workweek: t.workweek,
       requireGeofence: a.requireGeofence ?? true,
       allowSelfApproval: a.allowSelfApproval ?? false,
+      requireSeparatePublisher: t.settings?.payroll?.requireSeparatePublisher ?? false,
+      empPrefix: t.numbering?.employee.prefix ?? 'EMP-',
+      empPadding: t.numbering?.employee.padding ?? 4,
+      ltrPrefix: t.numbering?.letter.prefix ?? 'LTR-',
+      ltrPadding: t.numbering?.letter.padding ?? 4,
       allowGpsExceptions: a.allowGpsExceptions ?? true,
       requirePhoto: a.requirePhoto ?? false,
       maxAccuracyMeters: a.maxAccuracyMeters ?? 100,
       maxOpenSessionHours: a.maxOpenSessionHours ?? 16,
     });
   }, [t, f]);
+  const payrollOn = t?.modules?.includes('PAYROLL') ?? true;
   const save = useSave(
     (v: Out) =>
       api.patch('/tenants/current', {
@@ -63,6 +74,11 @@ export default function SettingsPage() {
             requirePhoto: v.requirePhoto,
             maxAccuracyMeters: v.maxAccuracyMeters,
             maxOpenSessionHours: v.maxOpenSessionHours,
+          },
+          ...(payrollOn ? { payroll: { requireSeparatePublisher: v.requireSeparatePublisher } } : {}),
+          numbering: {
+            employee: { prefix: v.empPrefix, padding: v.empPadding },
+            letter: { prefix: v.ltrPrefix, padding: v.ltrPadding },
           },
         },
       }),
@@ -178,6 +194,42 @@ export default function SettingsPage() {
               duties.
             </span>
           </label>
+          {payrollOn ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-1" {...f.register('requireSeparatePublisher')} />
+              <span>
+                <b>Payroll must be published by a different person.</b> Whoever generated a payroll
+                run cannot publish it.
+              </span>
+            </label>
+          ) : null}
+          <fieldset className="space-y-3 rounded-xl border border-border p-3">
+            <legend className="px-1 text-sm font-semibold">Numbering</legend>
+            <p className="text-xs text-muted">
+              Applies to new records only; existing codes never change. Numbers keep counting up
+              when you change the prefix.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Employee code prefix" error={e.empPrefix?.message}>
+                {(id, inv) => <Input id={id} invalid={inv} maxLength={10} {...f.register('empPrefix')} />}
+              </Field>
+              <Field label="Employee code digits" error={e.empPadding?.message}>
+                {(id, inv) => <Input id={id} type="number" invalid={inv} {...f.register('empPadding')} />}
+              </Field>
+              <Field label="Letter reference prefix" error={e.ltrPrefix?.message}>
+                {(id, inv) => <Input id={id} invalid={inv} maxLength={10} {...f.register('ltrPrefix')} />}
+              </Field>
+              <Field label="Letter reference digits" error={e.ltrPadding?.message}>
+                {(id, inv) => <Input id={id} type="number" invalid={inv} {...f.register('ltrPadding')} />}
+              </Field>
+            </div>
+            <p className="text-xs text-muted">
+              Next employee code looks like{' '}
+              <b>{`${(f.watch('empPrefix') ?? '').toUpperCase()}${'1'.padStart(Math.min(Math.max(Number(f.watch('empPadding')) || 4, 1), 8), '0')}`}</b>
+              ; letter references like{' '}
+              <b>{`${(f.watch('ltrPrefix') ?? '').toUpperCase()}${new Date().getFullYear()}-${'1'.padStart(Math.min(Math.max(Number(f.watch('ltrPadding')) || 4, 1), 8), '0')}`}</b>.
+            </p>
+          </fieldset>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Max GPS accuracy (m)" error={e.maxAccuracyMeters?.message}>
               {(id, inv) => (

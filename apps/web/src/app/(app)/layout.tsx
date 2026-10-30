@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useAuth } from '@/components/auth';
+import { PlatformConsole } from './platform-console';
 import { Button } from '@/components/ui/button';
 import { Avatar, Skeleton } from '@/components/ui/display';
 import { LANGUAGES, useI18n, type Key } from '@/lib/i18n';
@@ -107,6 +108,14 @@ export const NAV: NavItem[] = [
     groupKey: 'group.setup',
   },
   {
+    href: '/org',
+    label: 'nav.org',
+    icon: Users,
+    perms: ['employee:read:all'],
+    group: 'Company setup',
+    groupKey: 'group.setup',
+  },
+  {
     href: '/designations',
     label: 'nav.designations',
     icon: Briefcase,
@@ -145,6 +154,22 @@ export const NAV: NavItem[] = [
     perms: ['holiday:manage'],
     group: 'Company setup',
     groupKey: 'group.setup',
+  },
+  {
+    href: '/profile',
+    label: 'nav.profile',
+    groupKey: 'group.workforce',
+    icon: Users,
+    perms: ['employee:read:self'],
+    group: 'Workforce',
+  },
+  {
+    href: '/payslips',
+    label: 'nav.payslips',
+    groupKey: 'group.workforce',
+    icon: Wallet,
+    perms: ['payroll:read:self'],
+    group: 'Workforce',
   },
   {
     href: '/payroll',
@@ -208,6 +233,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, [status, router]);
   useEffect(() => setOpen(false), [path]);
 
+  if (status === 'platform') return <PlatformConsole />;
   if (status === 'offline')
     return (
       <Center>

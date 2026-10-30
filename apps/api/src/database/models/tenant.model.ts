@@ -20,6 +20,8 @@ const tenantSchema = new Schema(
     dbName: { type: String, unique: true, sparse: true },
     /** Seat limit: the most non-terminated employees this company may have. Absent = unlimited (legacy). */
     maxEmployees: { type: Number, min: 1, max: 100000 },
+    /** Modules the platform admin enabled for this company. Absent = all (older companies). */
+    modules: { type: [String], default: undefined },
     settings: {
       attendance: {
         requireGeofence: { type: Boolean, default: true },
@@ -28,6 +30,10 @@ const tenantSchema = new Schema(
         allowGpsExceptions: { type: Boolean, default: true },
         requirePhoto: { type: Boolean, default: false },
         maxOpenSessionHours: { type: Number, default: 16 },
+      },
+      numbering: {
+        employee: { prefix: { type: String }, padding: { type: Number } },
+        letter: { prefix: { type: String }, padding: { type: Number } },
       },
       payroll: {
         /** When true, whoever last generated a run cannot publish it. Off by default. */

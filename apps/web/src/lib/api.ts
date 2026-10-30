@@ -80,7 +80,7 @@ export class ApiClient {
   async login(email: string, password: string) {
     const env = await this.raw<{
       accessToken: string;
-      user: { id: string; email: string };
+      user: { id: string; email: string; isPlatformAdmin?: boolean };
       memberships: import('./types').Membership[];
     }>('POST', '/auth/login', { body: { email, password }, auth: false, tenant: false });
     this.accessToken = env.data.accessToken;
@@ -121,6 +121,7 @@ export class ApiClient {
     this.request<T>('GET', path, { query, signal });
   post = <T>(path: string, body?: unknown) => this.request<T>('POST', path, { body: body ?? {} });
   patch = <T>(path: string, body: unknown) => this.request<T>('PATCH', path, { body });
+  put = <T>(path: string, body: unknown) => this.request<T>('PUT', path, { body });
   del = <T>(path: string) => this.request<T>('DELETE', path, {});
 
   /** Unauthenticated call (activation, password reset). Sends no token and no tenant. */

@@ -108,6 +108,7 @@ void runScript(async (env) => {
       roles: ['PAYROLL_ADMIN'],
     },
   ];
+  // $env:SUPER_ADMIN_PASSWORD="Super-Admin-12345"; pnpm --filter @workforce/api create-super-admin --email super@admin.com              
   const byCode = new Map<string, InstanceType<typeof Employee>>();
   for (const p of people) {
     const user = await User.create({

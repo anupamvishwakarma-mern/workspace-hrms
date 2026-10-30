@@ -1,4 +1,6 @@
 import type { Router } from 'express';
+import { enabledModules } from './modules';
+import { PREFIX_RE, resolveNumbering } from './numbering';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
 import { Tenant } from '../../database/models/tenant.model';
@@ -17,6 +19,18 @@ export const timezoneSchema = z.string().refine((tz) => {
     return false;
   }
 }, 'Invalid IANA timezone');
+
+const numberingRule = z
+  .object({
+    prefix: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((s) => PREFIX_RE.test(s), 'Use up to 10 letters, digits, - _ or /'),
+    padding: z.number().int().min(1).max(8),
+  })
+  .partial()
+  .strict();
 
 const patchBody = z
   .object({
@@ -41,6 +55,10 @@ const patchBody = z
           .partial()
           .strict(),
         payroll: z.object({ requireSeparatePublisher: z.boolean() }).partial().strict(),
+        numbering: z
+          .object({ employee: numberingRule, letter: numberingRule })
+          .partial()
+          .strict(),
       })
       .partial()
       .strict(),
@@ -65,7 +83,9 @@ export const serializeTenant = (t: Record<string, unknown> & { _id: unknown }) =
   planId: t.planId,
   maxEmployees: t.maxEmployees,
   dbName: t.dbName,
+  modules: enabledModules(t.modules as string[] | undefined),
   settings: t.settings,
+  numbering: resolveNumbering((t.settings as { numbering?: never } | undefined)?.numbering),
   branding: t.branding,
   createdAt: t.createdAt,
   updatedAt: t.updatedAt,

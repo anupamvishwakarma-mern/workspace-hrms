@@ -14,13 +14,15 @@ import { ApiError } from '@/lib/errors';
 import type { Membership } from '@/lib/types';
 
 export type AuthStatus =
-  'loading' | 'offline' | 'signedOut' | 'needsCompany' | 'noAccess' | 'ready';
+  'loading' | 'offline' | 'signedOut' | 'needsCompany' | 'noAccess' | 'platform' | 'ready';
 interface AuthValue {
   status: AuthStatus;
   email?: string;
   memberships: Membership[];
   active?: Membership;
   can: (...perms: string[]) => boolean;
+  /** False when the platform administrator switched this module off for the company. */
+  hasModule: (key: string) => boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   selectCompany: (tenantId: string) => void;
@@ -57,10 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [email, setEmail] = useState<string>();
   const [attempt, setAttempt] = useState(0);
 
-  const apply = useCallback((list: Membership[]) => {
+  const apply = useCallback((list: Membership[], platformAdmin = false) => {
     const usable = list.filter((m) => !m.tenantStatus || m.tenantStatus === 'ACTIVE');
     setMemberships(usable);
-    if (usable.length === 0) return setStatus('noAccess');
+    // A platform administrator has no company; they get the platform console instead of an error.
+    if (usable.length === 0) return setStatus(platformAdmin ? 'platform' : 'noAccess');
     const saved = readPref();
     const pick =
       usable.find((m) => m.tenantId === saved) ?? (usable.length === 1 ? usable[0] : undefined);
@@ -85,10 +88,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus('loading');
       try {
         if (!(await api.restore())) return void (!cancelled && reset());
-        const me = await api.get<{ email?: string; memberships: Membership[] }>('/auth/me');
+        const me = await api.get<{
+          email?: string;
+          isPlatformAdmin?: boolean;
+          memberships: Membership[];
+        }>('/auth/me');
         if (!cancelled) {
           setEmail(me.data.email);
-          apply(me.data.memberships);
+          apply(me.data.memberships, me.data.isPlatformAdmin);
         }
       } catch (e) {
         if (cancelled) return;
@@ -109,11 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       memberships,
       active,
       can: (...perms) => !!active && perms.some((p) => active.permissions.includes(p)),
+      hasModule: (key) => !!active && (active.modules ? active.modules.includes(key) : true),
       async signIn(e, password) {
         const res = await api.login(e, password);
         qc.clear();
         setEmail(res.user.email);
-        apply(res.memberships);
+        apply(res.memberships, res.user.isPlatformAdmin);
       },
       async signOut() {
         await api.logout();

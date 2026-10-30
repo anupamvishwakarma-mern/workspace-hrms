@@ -30,6 +30,9 @@ import { api } from '@/lib/api';
 import { userMessage } from '@/lib/errors';
 import { ROLES, type Employee, type EmployeeDocument, type WorkLocation } from '@/lib/types';
 import { compact, formatDate, label } from '@/lib/utils';
+import { BankIds } from './bank-ids';
+import { ChangesTab } from './changes-tab';
+import { ProfileItems } from './profile-items';
 
 const LIMIT = 20;
 const STATUSES = ['INVITED', 'ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED'];
@@ -382,14 +385,17 @@ function CreateForm({ onClose }: { onClose: () => void }) {
 }
 
 function Manage({ emp, onClose }: { emp: Employee; onClose: () => void }) {
-  const { can } = useAuth();
-  const [tab, setTab] = useState<'details' | 'access' | 'documents' | 'probation' | 'offboard'>(
+  const { can, active } = useAuth();
+  const [tab, setTab] = useState<'details' | 'access' | 'documents' | 'profile' | 'changes' | 'bank' | 'probation' | 'offboard'>(
     'details',
   );
   const tabs = [
     ['details', true],
     ['access', can('employee:invite') || can('employee:roles')],
     ['documents', can('document:manage')],
+    ['profile', can('employee:read:all')],
+    ['changes', can('employee:read:all')],
+    ['bank', can('employee:sensitive:read', 'employee:sensitive:update')],
     ['probation', can('employee:update', 'employee:confirm')],
     ['offboard', can('employee:deactivate', 'employee:update', 'employee:reactivate')],
   ] as const;
@@ -404,11 +410,16 @@ function Manage({ emp, onClose }: { emp: Employee; onClose: () => void }) {
         label="Employee sections"
         value={tab}
         onChange={setTab}
-        tabs={tabs.filter(([, ok]) => ok).map(([k]) => ({ key: k, label: label(k) }))}
+        tabs={tabs
+          .filter(([, ok]) => ok)
+          .map(([k]) => ({ key: k, label: k === 'bank' ? 'Bank & IDs' : k === 'changes' ? 'Role history' : label(k) }))}
       />
       {tab === 'details' ? <Details emp={emp} onClose={onClose} /> : null}
       {tab === 'access' ? <Access emp={emp} /> : null}
       {tab === 'documents' ? <Documents emp={emp} /> : null}
+      {tab === 'changes' ? <ChangesTab emp={emp} /> : null}
+      {tab === 'profile' ? <ProfileItems employeeId={emp.id} canVerify={can('employee:update') && active?.employeeId !== emp.id} /> : null}
+      {tab === 'bank' ? <BankIds emp={emp} /> : null}
       {tab === 'probation' ? <Probation emp={emp} onClose={onClose} /> : null}
       {tab === 'offboard' ? <Offboard emp={emp} onClose={onClose} /> : null}
     </Modal>

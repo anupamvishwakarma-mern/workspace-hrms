@@ -20,7 +20,7 @@ const QUICK: [string, string, string][] = [
   ['Apply for leave', 'Casual, sick, earned', '/leave'],
   ['Regularize attendance', 'Fix a missed punch', '/attendance'],
   ['My attendance', 'Calendar and history', '/attendance'],
-  ['View payslip', 'Published payslips', '/payroll'],
+  ['View payslip', 'Published payslips', '/payslips'],
 ];
 
 export function EmployeeDashboard({ switcher }: { switcher: ReactNode }) {
@@ -211,7 +211,7 @@ export function EmployeeDashboard({ switcher }: { switcher: ReactNode }) {
           title="Pay and documents"
           sub="Published payslips"
           aside={
-            <Link href="/payroll" className="font-semibold text-primary hover:underline">
+            <Link href="/payslips" className="font-semibold text-primary hover:underline">
               Open
             </Link>
           }
