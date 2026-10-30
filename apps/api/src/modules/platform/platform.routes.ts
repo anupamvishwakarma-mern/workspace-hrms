@@ -1,7 +1,7 @@
 import type { Router } from 'express';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
-import { Employee } from '../../database/models/employee.model';
+import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { Tenant } from '../../database/models/tenant.model';
 import { User } from '../../database/models/user.model';
 import { authenticate, requirePlatformAdmin } from '../../middleware/auth';
@@ -164,7 +164,7 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
       const used = await runInTenant(before._id, () =>
         Employee.countDocuments({
           tenantId: before._id,
-          employmentStatus: { $ne: 'TERMINATED' },
+          employmentStatus: { $nin: ENDED_STATUSES },
         }),
       );
       if (maxEmployees < used)

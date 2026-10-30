@@ -2,13 +2,13 @@ import { DateTime } from 'luxon';
 import type { Types } from 'mongoose';
 import { AttendanceDay } from '../../database/models/attendanceDay.model';
 import { Department } from '../../database/models/department.model';
-import { Employee } from '../../database/models/employee.model';
+import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { AppError } from '../../utils/errors';
 import { addDays, localDate } from '../attendance/dates';
 import { computeDay, type TenantInfo } from '../attendance/attendance.service';
 
 /** Employees counted in reports: anyone who is not just an unaccepted invite. */
-const REPORTABLE = ['ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED'];
+const REPORTABLE = ['ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', ...ENDED_STATUSES];
 const MAX_MISSING_DAYS = 4000;
 
 export interface ScopedEmployee {

@@ -87,6 +87,44 @@ describe('notice period and reactivation', () => {
     ).toBe(1);
   });
 
+  it('employment can end as RESIGNED or RETIRED, and an ended record is read-only until reactivated', async () => {
+    for (const [name, type] of [['quitter', 'RESIGNED'], ['retiree', 'RETIRED']] as const) {
+      const p = await addPerson(t.tenantId, 'acme', name, ['EMPLOYEE'], t.department);
+      const out = await call('post', 'hr', `/employees/${p.employeeId}/deactivate`).send({
+        reason: 'Left the company',
+        separationType: type,
+        lastWorkingDate: '2026-05-31',
+      });
+      expect(out.status, JSON.stringify(out.body)).toBe(200);
+      expect(out.body.data.employmentStatus).toBe(type);
+      const emp = await Employee.findById(p.employeeId).lean();
+      expect(emp!.history.at(-1)).toMatchObject({ type: 'STATUS_CHANGE', to: type });
+      // ended records are read-only and cannot be put back with a plain status patch
+      expect(
+        (await call('patch', 'hr', `/employees/${p.employeeId}`).send({ firstName: 'Nope' })).status,
+      ).toBe(409);
+      expect(
+        (await call('patch', 'hr', `/employees/${p.employeeId}`).send({ employmentStatus: 'ACTIVE' }))
+          .status,
+      ).toBe(409);
+      const back = await call('post', 'hr', `/employees/${p.employeeId}/reactivate`).send({
+        reason: 'Returned',
+      });
+      expect(back.status).toBe(200);
+      expect(back.body.data.employmentStatus).toBe('ACTIVE');
+    }
+    // an unknown separation type is rejected up front
+    const q = await addPerson(t.tenantId, 'acme', 'oddity', ['EMPLOYEE'], t.department);
+    expect(
+      (
+        await call('post', 'hr', `/employees/${q.employeeId}/deactivate`).send({
+          reason: 'Left the company',
+          separationType: 'VANISHED',
+        })
+      ).status,
+    ).toBe(422);
+  });
+
   it('only HR/owner may do this, and never across companies', async () => {
     const p = await addPerson(t.tenantId, 'acme', 'target', ['EMPLOYEE'], t.department);
     for (const who of ['manager', 'employee', 'payroll']) {
@@ -142,10 +180,11 @@ describe('audit-log API', () => {
     const res = await call('get', 'hr', '/audit-logs?action=employee.reactivate');
     expect(res.status).toBe(200);
     expect(res.body.data.length).toBeGreaterThanOrEqual(1);
-    const row = res.body.data[0];
+    // other tests in this file also reactivate people, so find the 'Rehired' entry rather than assume order
+    const row = res.body.data.find((r: { reason?: string }) => r.reason === 'Rehired');
+    expect(row).toBeDefined();
     expect(row.action).toBe('employee.reactivate');
     expect(row.actorEmail).toBe(t.people.hr.email);
-    expect(row.reason).toBe('Rehired');
     const all = await call('get', 'hr', '/audit-logs?limit=100');
     expect(JSON.stringify(all.body)).not.toMatch(/passwordHash|\$argon2|refreshToken/i);
     const page = await call('get', 'hr', '/audit-logs?limit=1&page=2');

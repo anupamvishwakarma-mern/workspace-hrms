@@ -159,8 +159,22 @@ export function permissionsFor(roles: readonly TenantRole[]): Set<Permission> {
   return new Set(roles.flatMap((r) => ROLE_PERMISSIONS[r] ?? []));
 }
 
-export const hasPermission = (roles: readonly TenantRole[], p: Permission): boolean =>
-  permissionsFor(roles).has(p);
+/** Who is asking: their built-in roles plus any permissions added by company-defined roles. */
+export interface PermissionSubject {
+  roles: readonly TenantRole[];
+  extraPermissions?: ReadonlySet<Permission>;
+}
+
+/** Accepts a tenant context (preferred) or a bare roles array. */
+export const hasPermission = (
+  subject: readonly TenantRole[] | PermissionSubject,
+  p: Permission,
+): boolean => {
+  const s: PermissionSubject = Array.isArray(subject)
+    ? { roles: subject as readonly TenantRole[] }
+    : (subject as PermissionSubject);
+  return permissionsFor(s.roles).has(p) || (s.extraPermissions?.has(p) ?? false);
+};
 
 /** Roles a given actor may assign to others. Prevents privilege escalation via invite/role changes. */
 export function assignableRoles(actorRoles: readonly TenantRole[]): Set<TenantRole> {

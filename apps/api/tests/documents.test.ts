@@ -90,6 +90,7 @@ describe('upload, confirm, download (real S3 protocol via a local server)', () =
     const ok = await call('post', 'hr', `/employees/${empId()}/documents/${id}/confirm`);
     expect(ok.status).toBe(200);
     expect(ok.body.data.status).toBe('AVAILABLE');
+    expect(ok.body.data.referenceNo).toMatch(/^DOC-\d{4}-0001$/);
     expect(JSON.stringify(ok.body)).not.toMatch(/storageKey|tenants\//);
 
     const list = await call('get', 'employee', `/employees/${empId()}/documents`);
@@ -104,7 +105,8 @@ describe('upload, confirm, download (real S3 protocol via a local server)', () =
 
     // hidden documents are invisible to the employee but not to HR
     const hidden = await uploadAndConfirm({ title: 'Internal note', visibleToEmployee: false });
-    await call('post', 'hr', `/employees/${empId()}/documents/${hidden.id}/confirm`);
+    const hiddenOk = await call('post', 'hr', `/employees/${empId()}/documents/${hidden.id}/confirm`);
+    expect(hiddenOk.body.data.referenceNo).toMatch(/^DOC-\d{4}-0002$/); // counts up, never repeats
     expect(
       (await call('get', 'employee', `/employees/${empId()}/documents`)).body.data,
     ).toHaveLength(1);

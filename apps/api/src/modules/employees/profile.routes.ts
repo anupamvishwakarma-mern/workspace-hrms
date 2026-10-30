@@ -1,7 +1,7 @@
 import type { Request, Router } from 'express';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
-import { Employee } from '../../database/models/employee.model';
+import { Employee, isEnded } from '../../database/models/employee.model';
 import { PROFILE_KINDS, ProfileItem, SKILL_LEVELS } from '../../database/models/profileItem.model';
 import { authenticate, requirePermission, resolveTenant } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -80,14 +80,14 @@ export function registerProfileRoutes(v1: Router, env: Env): void {
   async function access(req: Request, id: string, write: boolean) {
     const ctx = req.tenantCtx!;
     const isSelf = !!ctx.employeeId && String(ctx.employeeId) === id;
-    const hr = hasPermission(ctx.roles, write ? 'employee:update' : 'employee:read:all');
-    if (!hr && !(isSelf && hasPermission(ctx.roles, write ? 'employee:update:self' : 'employee:read:self')))
+    const hr = hasPermission(ctx, write ? 'employee:update' : 'employee:read:all');
+    if (!hr && !(isSelf && hasPermission(ctx, write ? 'employee:update:self' : 'employee:read:self')))
       throw AppError.notFound('Employee not found');
     const emp = await Employee.findOne({ _id: id, tenantId: ctx.tenantId }).select('employmentStatus').lean();
     if (!emp) throw AppError.notFound('Employee not found');
-    if (write && emp.employmentStatus === 'TERMINATED')
+    if (write && isEnded(emp.employmentStatus))
       throw AppError.conflict('Terminated employee records are read-only');
-    return { ctx, isSelf, hr: hasPermission(ctx.roles, 'employee:update') };
+    return { ctx, isSelf, hr: hasPermission(ctx, 'employee:update') };
   }
 
   route(

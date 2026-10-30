@@ -158,7 +158,7 @@ export function registerPhotoRoutes(v1: Router, env: Env, deps: { clock: Clock }
       }).lean();
       const own = !!ev && !!ctx.employeeId && String(ev.employeeId) === String(ctx.employeeId);
       let allowed = own;
-      if (ev && !own && hasPermission(ctx.roles, 'attendance:events:read')) {
+      if (ev && !own && hasPermission(ctx, 'attendance:events:read')) {
         const scope = await teamScope(ctx, 'attendance:review:all', 'attendance:read:team');
         allowed = !scope || scope.some((s) => String(s) === String(ev.employeeId));
       }

@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import type { Types } from 'mongoose';
 import { AttendanceDay } from '../../database/models/attendanceDay.model';
 import { Department } from '../../database/models/department.model';
-import { Employee } from '../../database/models/employee.model';
+import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { LeaveRequest } from '../../database/models/leaveRequest.model';
 import { LeaveType } from '../../database/models/leaveType.model';
 import { PayrollRun, Payslip } from '../../database/models/payroll.model';
@@ -60,7 +60,7 @@ export async function generateRun(
 
   const emps = await Employee.find({
     tenantId: tenant._id,
-    employmentStatus: { $in: ['ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED'] },
+    employmentStatus: { $in: ['ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', ...ENDED_STATUSES] },
   })
     .select('employeeCode firstName lastName designation departmentId joiningDate lastWorkingDate workLocationIds')
     .sort({ employeeCode: 1 })

@@ -7,6 +7,7 @@ describe('numbering rules', () => {
     expect(n).toEqual(DEFAULT_NUMBERING);
     expect(formatNumber(n.employee, 7)).toBe('EMP-0007');
     expect(formatNumber(n.letter, 12, '2026-')).toBe('LTR-2026-0012');
+    expect(formatNumber(n.document, 3, '2026-')).toBe('DOC-2026-0003');
   });
   it('use stored values and fall back per field', () => {
     const n = resolveNumbering({ employee: { prefix: 'ACME/', padding: 6 }, letter: { prefix: null } });

@@ -5,7 +5,9 @@ import {
   Employee,
   EMPLOYMENT_STATUSES,
   EMPLOYMENT_TYPES,
+  isEnded,
   PROBATION_STATUSES,
+  SEPARATION_TYPES,
 } from '../../database/models/employee.model';
 import { TENANT_ROLES } from '../../database/models/membership.model';
 import { authenticate, requirePermission, resolveTenant } from '../../middleware/auth';
@@ -97,8 +99,8 @@ const adminPatchBody = z
     employmentStatus: z
       .enum(EMPLOYMENT_STATUSES)
       .refine(
-        (s) => s !== 'TERMINATED' && s !== 'INVITED',
-        'Use the deactivate endpoint to terminate',
+        (s) => !isEnded(s) && s !== 'INVITED',
+        'Use the deactivate endpoint to end employment',
       ),
     joiningDate: dateInput,
     noticePeriodStartDate: dateInput,
@@ -156,6 +158,8 @@ const deactivateBody = z
   .object({
     reason: z.string().trim().min(3).max(500),
     terminate: z.boolean().default(true),
+    /** How employment ends: dismissed, resigned or retired. Only used when terminate is true. */
+    separationType: z.enum(SEPARATION_TYPES).default('TERMINATED'),
     lastWorkingDate: dateInput.optional(),
   })
   .strict();
@@ -264,7 +268,7 @@ export function registerEmployeeRoutes(v1: Router, env: Env): void {
     asyncHandler(async (req, res) => {
       const ctx = req.tenantCtx!;
       const id = String(req.params.id);
-      const admin = hasPermission(ctx.roles, 'employee:update');
+      const admin = hasPermission(ctx, 'employee:update');
       if (!admin && String(ctx.employeeId) !== id) throw AppError.forbidden();
       const body = (admin ? adminPatchBody : selfPatchBody).parse(req.body ?? {}) as Record<
         string,
@@ -272,8 +276,8 @@ export function registerEmployeeRoutes(v1: Router, env: Env): void {
       >;
       const before = await Employee.findOne({ _id: id, tenantId: ctx.tenantId });
       if (!before) throw AppError.notFound('Employee not found');
-      if (before.employmentStatus === 'TERMINATED')
-        throw AppError.conflict('Terminated employee records are read-only');
+      if (isEnded(before.employmentStatus))
+        throw AppError.conflict('Records of employees whose employment has ended are read-only');
       await svc.assertRefs(
         ctx.tenantId,
         body as {
@@ -416,7 +420,7 @@ export function registerEmployeeRoutes(v1: Router, env: Env): void {
       method: 'post',
       path: '/employees/:id/deactivate',
       summary:
-        'Disable login and (by default) terminate employment. Historical records are retained.',
+        'Disable login and (by default) end employment as TERMINATED, RESIGNED or RETIRED (separationType). Historical records are retained.',
       tags: ['Employees'],
       auth: 'tenant',
       permission: 'employee:deactivate',

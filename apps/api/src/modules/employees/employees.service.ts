@@ -5,7 +5,7 @@ import type { Request } from 'express';
 import type { Env } from '../../config/env';
 import { Department } from '../../database/models/department.model';
 import { Designation } from '../../database/models/designation.model';
-import { Employee, type EmploymentStatus } from '../../database/models/employee.model';
+import { ENDED_STATUSES, Employee, isEnded, type EmploymentStatus } from '../../database/models/employee.model';
 import { nextSequence } from '../../database/models/counter.model';
 import { Membership, type TenantRole } from '../../database/models/membership.model';
 import { Session } from '../../database/models/session.model';
@@ -62,16 +62,16 @@ export function viewFor(
   emp: { _id: Types.ObjectId; managerId?: Types.ObjectId | null },
 ): View | null {
   const isSelf = !!ctx.employeeId && String(ctx.employeeId) === String(emp._id);
-  if (hasPermission(ctx.roles, 'employee:read:all')) return 'FULL';
-  if (isSelf && hasPermission(ctx.roles, 'employee:read:self')) return 'SELF';
+  if (hasPermission(ctx, 'employee:read:all')) return 'FULL';
+  if (isSelf && hasPermission(ctx, 'employee:read:self')) return 'SELF';
   if (
-    hasPermission(ctx.roles, 'employee:read:team') &&
+    hasPermission(ctx, 'employee:read:team') &&
     ctx.employeeId &&
     emp.managerId &&
     String(emp.managerId) === String(ctx.employeeId)
   )
     return 'TEAM';
-  if (hasPermission(ctx.roles, 'employee:read:basic')) return 'BASIC';
+  if (hasPermission(ctx, 'employee:read:basic')) return 'BASIC';
   return null;
 }
 
@@ -94,15 +94,15 @@ export function serializeEmployee(emp: Lean, view: View) {
 export function visibilityFilter(ctx: NonNullable<Request['tenantCtx']>): Record<string, unknown> {
   const base = { tenantId: ctx.tenantId };
   if (
-    hasPermission(ctx.roles, 'employee:read:all') ||
-    hasPermission(ctx.roles, 'employee:read:basic')
+    hasPermission(ctx, 'employee:read:all') ||
+    hasPermission(ctx, 'employee:read:basic')
   )
     return base;
   const me = ctx.employeeId;
   if (!me) return { ...base, _id: { $in: [] } };
   const or: Record<string, unknown>[] = [];
-  if (hasPermission(ctx.roles, 'employee:read:self')) or.push({ _id: me });
-  if (hasPermission(ctx.roles, 'employee:read:team')) or.push({ managerId: me });
+  if (hasPermission(ctx, 'employee:read:self')) or.push({ _id: me });
+  if (hasPermission(ctx, 'employee:read:team')) or.push({ managerId: me });
   return or.length ? { ...base, $or: or } : { ...base, _id: { $in: [] } };
 }
 
@@ -213,10 +213,12 @@ export async function assertRefs(
 
 const TRANSITIONS: Record<EmploymentStatus, EmploymentStatus[]> = {
   INVITED: ['ACTIVE', 'TERMINATED'],
-  ACTIVE: ['ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED'],
-  ON_LEAVE: ['ACTIVE', 'NOTICE_PERIOD', 'TERMINATED'],
-  NOTICE_PERIOD: ['ACTIVE', 'TERMINATED'],
+  ACTIVE: ['ON_LEAVE', 'NOTICE_PERIOD', ...ENDED_STATUSES],
+  ON_LEAVE: ['ACTIVE', 'NOTICE_PERIOD', ...ENDED_STATUSES],
+  NOTICE_PERIOD: ['ACTIVE', ...ENDED_STATUSES],
   TERMINATED: [],
+  RESIGNED: [],
+  RETIRED: [],
 };
 export const canTransition = (from: EmploymentStatus, to: EmploymentStatus) =>
   TRANSITIONS[from]?.includes(to) ?? false;
@@ -228,7 +230,7 @@ export async function assertSeatAvailable(tenantId: Types.ObjectId) {
   if (!max) return; // unlimited (older companies)
   const used = await Employee.countDocuments({
     tenantId,
-    employmentStatus: { $ne: 'TERMINATED' },
+    employmentStatus: { $nin: ENDED_STATUSES },
   });
   if (used >= max)
     throw new AppError(
@@ -300,8 +302,8 @@ export async function inviteEmployee(
   const tenantId = ctx.tenantId;
   const emp = await Employee.findOne({ _id: employeeId, tenantId });
   if (!emp) throw AppError.notFound('Employee not found');
-  if (emp.employmentStatus === 'TERMINATED')
-    throw AppError.conflict('Terminated employees cannot be invited');
+  if (isEnded(emp.employmentStatus))
+    throw AppError.conflict('Employees whose employment has ended cannot be invited');
   const allowed = assignableRoles(ctx.roles);
   if (roles.some((r) => !allowed.has(r)))
     throw AppError.forbidden('You cannot assign one or more of the requested roles');
@@ -358,7 +360,12 @@ export async function deactivateEmployee(
   tenantId: Types.ObjectId,
   actorUserId: Types.ObjectId,
   employeeId: string,
-  opts: { reason: string; terminate: boolean; lastWorkingDate?: Date },
+  opts: {
+    reason: string;
+    terminate: boolean;
+    separationType?: (typeof ENDED_STATUSES)[number];
+    lastWorkingDate?: Date;
+  },
 ) {
   const emp = await Employee.findOne({ _id: employeeId, tenantId });
   if (!emp) throw AppError.notFound('Employee not found');
@@ -382,16 +389,17 @@ export async function deactivateEmployee(
         { $set: { revokedAt: new Date(), revokedReason: 'ACCOUNT_DEACTIVATED' } },
       );
   }
-  if (opts.terminate && emp.employmentStatus !== 'TERMINATED') {
+  if (opts.terminate && !isEnded(emp.employmentStatus)) {
+    const endStatus = opts.separationType ?? 'TERMINATED';
     emp.history.push({
       type: 'STATUS_CHANGE',
       from: emp.employmentStatus,
-      to: 'TERMINATED',
+      to: endStatus,
       byUserId: actorUserId,
       reason: opts.reason,
       at: new Date(),
     } as never);
-    emp.employmentStatus = 'TERMINATED';
+    emp.employmentStatus = endStatus;
     emp.lastWorkingDate = opts.lastWorkingDate ?? new Date();
   } else {
     emp.history.push({
@@ -479,10 +487,10 @@ export async function reactivateEmployee(
 ) {
   const emp = await Employee.findOne({ _id: employeeId, tenantId });
   if (!emp) throw AppError.notFound('Employee not found');
-  if (emp.employmentStatus === 'TERMINATED') await assertSeatAvailable(tenantId);
+  if (isEnded(emp.employmentStatus)) await assertSeatAvailable(tenantId);
   const membership = emp.userId ? await Membership.findOne({ tenantId, userId: emp.userId }) : null;
   const loginDisabled = membership?.status === 'INACTIVE';
-  if (emp.employmentStatus !== 'TERMINATED' && !loginDisabled)
+  if (!isEnded(emp.employmentStatus) && !loginDisabled)
     throw AppError.conflict('Employee is not deactivated');
   if (membership) {
     membership.status = 'ACTIVE';
@@ -519,8 +527,8 @@ export async function setProbation(
 ) {
   const emp = await Employee.findOne({ _id: employeeId, tenantId });
   if (!emp) throw AppError.notFound('Employee not found');
-  if (emp.employmentStatus === 'TERMINATED')
-    throw AppError.conflict('Terminated employee records are read-only');
+  if (isEnded(emp.employmentStatus))
+    throw AppError.conflict('Records of employees whose employment has ended are read-only');
   if (emp.probationStatus === 'CONFIRMED')
     throw AppError.conflict('This employee is already confirmed');
   if (emp.joiningDate && opts.endDate <= emp.joiningDate)

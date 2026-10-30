@@ -405,7 +405,7 @@ export function registerPayrollRoutes(v1: Router, env: Env, deps: { clock: Clock
       const ctx = req.tenantCtx!;
       const p = await Payslip.findOne({ _id: req.params.id, tenantId: ctx.tenantId }).lean();
       const own = !!p && !!ctx.employeeId && String(p.employeeId) === String(ctx.employeeId);
-      const manager = hasPermission(ctx.roles, 'payroll:manage');
+      const manager = hasPermission(ctx, 'payroll:manage');
       if (!p || !((own && p.status === 'PUBLISHED') || manager))
         throw AppError.notFound('Payslip not found');
       if (!own)
@@ -436,7 +436,7 @@ export function registerPayrollRoutes(v1: Router, env: Env, deps: { clock: Clock
       const ctx = req.tenantCtx!;
       const p = await Payslip.findOne({ _id: req.params.id, tenantId: ctx.tenantId }).lean();
       const own = !!p && !!ctx.employeeId && String(p.employeeId) === String(ctx.employeeId);
-      const manager = hasPermission(ctx.roles, 'payroll:manage');
+      const manager = hasPermission(ctx, 'payroll:manage');
       if (!p || !((own && p.status === 'PUBLISHED') || manager))
         throw AppError.notFound('Payslip not found');
       if (!own)

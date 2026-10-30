@@ -2,7 +2,7 @@ import type { Router } from 'express';
 import type { Types } from 'mongoose';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
-import { Employee } from '../../database/models/employee.model';
+import { Employee, isEnded } from '../../database/models/employee.model';
 import {
   EmployeeSensitive,
   ENCRYPTED_FIELDS,
@@ -109,9 +109,9 @@ export function registerSensitiveRoutes(v1: Router, env: Env): void {
       const ctx = req.tenantCtx!;
       const id = String(req.params.id);
       const isSelf = !!ctx.employeeId && String(ctx.employeeId) === id;
-      const privileged = hasPermission(ctx.roles, 'employee:sensitive:read');
+      const privileged = hasPermission(ctx, 'employee:sensitive:read');
       // Anyone else gets 404, not 403, so the existence of the record is not revealed.
-      if (!privileged && !(isSelf && hasPermission(ctx.roles, 'employee:read:self')))
+      if (!privileged && !(isSelf && hasPermission(ctx, 'employee:read:self')))
         throw AppError.notFound('Employee not found');
       if (!(await Employee.exists({ _id: id, tenantId: ctx.tenantId })))
         throw AppError.notFound('Employee not found');
@@ -160,7 +160,7 @@ export function registerSensitiveRoutes(v1: Router, env: Env): void {
         .select('employmentStatus')
         .lean();
       if (!emp) throw AppError.notFound('Employee not found');
-      if (emp.employmentStatus === 'TERMINATED')
+      if (isEnded(emp.employmentStatus))
         throw AppError.conflict('Terminated employee records are read-only');
 
       const body = req.body as Record<string, string | null>;

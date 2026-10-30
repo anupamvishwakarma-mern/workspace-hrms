@@ -56,7 +56,7 @@ const patchBody = z
           .strict(),
         payroll: z.object({ requireSeparatePublisher: z.boolean() }).partial().strict(),
         numbering: z
-          .object({ employee: numberingRule, letter: numberingRule })
+          .object({ employee: numberingRule, letter: numberingRule, document: numberingRule })
           .partial()
           .strict(),
       })

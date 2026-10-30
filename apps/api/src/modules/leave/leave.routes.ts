@@ -104,7 +104,7 @@ export function registerLeaveRoutes(v1: Router, env: Env, deps: { clock: Clock }
     ...chain,
     requirePermission('leave:apply'),
     asyncHandler(async (req, res) => {
-      const manage = hasPermission(req.tenantCtx!.roles, 'leave:manage');
+      const manage = hasPermission(req.tenantCtx!, 'leave:manage');
       const items = await LeaveType.find({
         tenantId: req.tenantCtx!.tenantId,
         ...(manage ? {} : { status: 'ACTIVE' }),
@@ -324,9 +324,9 @@ export function registerLeaveRoutes(v1: Router, env: Env, deps: { clock: Clock }
         filter.employeeId = ctx.employeeId;
       } else {
         const reviewer =
-          hasPermission(ctx.roles, 'leave:review:all') ||
-          hasPermission(ctx.roles, 'leave:review:team');
-        const all = !reviewer && hasPermission(ctx.roles, 'leave:read:all');
+          hasPermission(ctx, 'leave:review:all') ||
+          hasPermission(ctx, 'leave:review:team');
+        const all = !reviewer && hasPermission(ctx, 'leave:read:all');
         if (!reviewer && !all) throw AppError.forbidden();
         // Payroll may read dates/types company-wide but not the private reason text.
         seeAllReasons = reviewer;

@@ -9,6 +9,8 @@ declare global {
       tenantCtx?: {
         tenantId: Types.ObjectId;
         roles: TenantRole[];
+        /** Permissions added by company-defined roles (empty until custom roles exist). */
+        extraPermissions?: ReadonlySet<import('../modules/auth/permissions').Permission>;
         employeeId?: Types.ObjectId;
       };
     }

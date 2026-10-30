@@ -52,7 +52,7 @@ export function registerHandbookRoutes(v1: Router, env: Env, deps: { clock: Cloc
     asyncHandler(async (req, res) => {
       const ctx = req.tenantCtx!;
       const q = req.query as unknown as z.infer<typeof listQuery>;
-      const drafts = q.includeDrafts === 'true' && hasPermission(ctx.roles, 'handbook:manage');
+      const drafts = q.includeDrafts === 'true' && hasPermission(ctx, 'handbook:manage');
       const rows = await HandbookSection.find({
         tenantId: ctx.tenantId,
         ...(drafts ? {} : { status: 'PUBLISHED' }),

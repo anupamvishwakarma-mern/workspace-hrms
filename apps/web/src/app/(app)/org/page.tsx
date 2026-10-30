@@ -1,4 +1,5 @@
 'use client';
+import { isEnded } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -29,7 +30,7 @@ export default function OrgPage() {
   const [allOpen, setAllOpen] = useState(false);
 
   const people = useMemo(
-    () => (q.data ?? []).filter((e) => e.employmentStatus !== 'TERMINATED'),
+    () => (q.data ?? []).filter((e) => !isEnded(e.employmentStatus)),
     [q.data],
   );
   const needle = search.trim().toLowerCase();

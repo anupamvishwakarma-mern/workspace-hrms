@@ -117,6 +117,7 @@ export interface Tenant {
   numbering?: {
     employee: { prefix: string; padding: number };
     letter: { prefix: string; padding: number };
+    document?: { prefix: string; padding: number };
   };
 }
 export interface DayRow {
@@ -242,6 +243,7 @@ export interface LeaveBalance {
 }
 export interface EmployeeDocument {
   id: string;
+  referenceNo?: string | null;
   employeeId: string;
   category: string;
   title: string;

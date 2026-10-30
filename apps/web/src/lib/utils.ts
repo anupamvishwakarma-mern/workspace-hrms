@@ -23,6 +23,9 @@ export const todayIso = (zone: string) => DateTime.now().setZone(zone).toISODate
 export const addDaysIso = (d: string, n: number) =>
   DateTime.fromISO(d, { zone: 'utc' }).plus({ days: n }).toISODate()!;
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** Employment has ended. Keep in step with the API's ENDED_STATUSES. */
+export const ENDED_STATUSES = ['TERMINATED', 'RESIGNED', 'RETIRED'] as const;
+export const isEnded = (s?: string | null) => (ENDED_STATUSES as readonly string[]).includes(s ?? '');
 export const label = (s: string) =>
   s
     .replace(/_/g, ' ')

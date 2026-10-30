@@ -212,7 +212,7 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
       const actor = actorOf(req);
       let filter: Record<string, unknown>;
       if (q.scope === 'all') {
-        if (!hasPermission(req.tenantCtx!.roles, 'approval:manage')) throw AppError.forbidden();
+        if (!hasPermission(req.tenantCtx!, 'approval:manage')) throw AppError.forbidden();
         filter = { tenantId: actor.tenantId };
       } else if (q.scope === 'inbox') {
         filter = await inboxFilter(actor);
@@ -241,7 +241,7 @@ export function registerApprovalRoutes(v1: Router, env: Env): void {
       const doc = await ApprovalRequest.findOne({ _id: req.params.id, tenantId: actor.tenantId }).lean();
       if (!doc) throw AppError.notFound('Request not found');
       const mine = !!actor.employeeId && String(doc.requesterEmployeeId) === String(actor.employeeId);
-      const manage = hasPermission(req.tenantCtx!.roles, 'approval:manage');
+      const manage = hasPermission(req.tenantCtx!, 'approval:manage');
       const inInbox = !mine && (await ApprovalRequest.exists({ ...(await inboxFilter(actor)), _id: doc._id }));
       const wasApprover =
         !!actor.employeeId &&

@@ -7,8 +7,15 @@ export const EMPLOYMENT_STATUSES = [
   'ON_LEAVE',
   'NOTICE_PERIOD',
   'TERMINATED',
+  'RESIGNED',
+  'RETIRED',
 ] as const;
 export type EmploymentStatus = (typeof EMPLOYMENT_STATUSES)[number];
+/** Statuses that mean employment has ended. Always use these, never a literal 'TERMINATED'. */
+export const ENDED_STATUSES = ['TERMINATED', 'RESIGNED', 'RETIRED'] as const;
+export const SEPARATION_TYPES = ENDED_STATUSES;
+export const isEnded = (s: string | null | undefined): boolean =>
+  (ENDED_STATUSES as readonly string[]).includes(s ?? '');
 /** Probation is tracked separately from employment status so ACTIVE people stay ACTIVE for attendance, leave and payroll. */
 export const PROBATION_STATUSES = ['ON_PROBATION', 'CONFIRMED'] as const;
 export const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'] as const;

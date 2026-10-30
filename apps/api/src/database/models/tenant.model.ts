@@ -34,6 +34,7 @@ const tenantSchema = new Schema(
       numbering: {
         employee: { prefix: { type: String }, padding: { type: Number } },
         letter: { prefix: { type: String }, padding: { type: Number } },
+        document: { prefix: { type: String }, padding: { type: Number } },
       },
       payroll: {
         /** When true, whoever last generated a run cannot publish it. Off by default. */

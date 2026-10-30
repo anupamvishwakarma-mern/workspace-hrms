@@ -121,8 +121,8 @@ export const resolveTenant: RequestHandler = async (req, _res, next) => {
 export const requirePermission =
   (...anyOf: Permission[]): RequestHandler =>
   (req, _res, next) => {
-    const roles = req.tenantCtx?.roles;
-    if (!roles || !anyOf.some((p) => hasPermission(roles, p))) return next(AppError.forbidden());
+    const ctx = req.tenantCtx;
+    if (!ctx || !anyOf.some((p) => hasPermission(ctx, p))) return next(AppError.forbidden());
     next();
   };
 

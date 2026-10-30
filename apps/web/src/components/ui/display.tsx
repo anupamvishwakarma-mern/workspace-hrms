@@ -52,6 +52,8 @@ export const statusTone = (s?: string): Tone =>
       ABSENT: 'danger',
       REJECTED: 'danger',
       TERMINATED: 'danger',
+      RESIGNED: 'neutral',
+      RETIRED: 'neutral',
       INACTIVE: 'neutral',
     }) as Record<string, Tone>
   )[s ?? ''] ?? 'neutral';

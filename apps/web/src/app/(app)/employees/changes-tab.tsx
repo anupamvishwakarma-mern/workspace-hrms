@@ -11,7 +11,7 @@ import { useDepartments, useDesignations } from '@/hooks/lookups';
 import { api } from '@/lib/api';
 import { userMessage } from '@/lib/errors';
 import type { Employee, EmploymentChange } from '@/lib/types';
-import { formatDate } from '@/lib/utils';
+import { formatDate, isEnded } from '@/lib/utils';
 import { DateTime } from 'luxon';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -43,7 +43,7 @@ export function ChangesTab({ emp }: { emp: Employee }) {
   if (!q.data) return <Skeleton className="h-32" />;
   return (
     <div className="space-y-4">
-      {canRecord && emp.employmentStatus !== 'TERMINATED' ? (
+      {canRecord && !isEnded(emp.employmentStatus) ? (
         <div className="flex justify-end">
           <Button onClick={() => setAdding(true)}>
             <Plus className="h-4 w-4" aria-hidden /> Record change

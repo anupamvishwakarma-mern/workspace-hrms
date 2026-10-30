@@ -2,7 +2,7 @@ import type { Request, Router } from 'express';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
 import { Department } from '../../database/models/department.model';
-import { Employee } from '../../database/models/employee.model';
+import { Employee, isEnded } from '../../database/models/employee.model';
 import { CHANGE_TYPES, EmploymentChange } from '../../database/models/employmentChange.model';
 import { authenticate, requirePermission, resolveTenant } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
@@ -55,7 +55,7 @@ export function registerChangeRoutes(v1: Router, env: Env): void {
       const ctx = req.tenantCtx!;
       const id = String(req.params.id);
       const self = !!ctx.employeeId && String(ctx.employeeId) === id;
-      if (!hasPermission(ctx.roles, 'employee:read:all') && !self) throw AppError.notFound('Employee not found');
+      if (!hasPermission(ctx, 'employee:read:all') && !self) throw AppError.notFound('Employee not found');
       if (!(await Employee.exists({ _id: id, tenantId: ctx.tenantId }))) throw AppError.notFound('Employee not found');
       const items = await EmploymentChange.find({ tenantId: ctx.tenantId, employeeId: id })
         .sort({ effectiveDate: -1, createdAt: -1 })
@@ -79,7 +79,7 @@ export function registerChangeRoutes(v1: Router, env: Env): void {
         throw AppError.forbidden('You cannot record a change on your own record');
       const emp = await Employee.findOne({ _id: id, tenantId: ctx.tenantId });
       if (!emp) throw AppError.notFound('Employee not found');
-      if (emp.employmentStatus === 'TERMINATED') throw AppError.conflict('Terminated employee records are read-only');
+      if (isEnded(emp.employmentStatus)) throw AppError.conflict('Terminated employee records are read-only');
 
       const touches = ['designationId', 'departmentId', 'managerId', 'workLocationIds'].filter((k) => k in b);
       if (b.type === 'PROMOTION' && !b.designationId) throw AppError.unprocessable('A promotion needs the new designation');

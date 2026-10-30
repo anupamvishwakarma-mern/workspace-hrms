@@ -14,6 +14,8 @@ import { route } from '../../utils/route';
 import { idParams, objectId, validate } from '../../utils/validate';
 import { writeAudit } from '../audit/audit.service';
 import { hasPermission } from '../auth/permissions';
+import { nextSequence } from '../../database/models/counter.model';
+import { formatNumber, numberingFor } from '../tenants/numbering';
 import { getStorage, type ObjectStorage } from './storage';
 
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -44,9 +46,9 @@ type Ctx = NonNullable<Request['tenantCtx']>;
 async function accessFor(ctx: Ctx, employeeId: string): Promise<'manage' | 'self'> {
   const exists = await Employee.exists({ _id: employeeId, tenantId: ctx.tenantId });
   if (!exists) throw AppError.notFound('Employee not found');
-  if (hasPermission(ctx.roles, 'document:manage')) return 'manage';
+  if (hasPermission(ctx, 'document:manage')) return 'manage';
   if (
-    hasPermission(ctx.roles, 'document:read:self') &&
+    hasPermission(ctx, 'document:read:self') &&
     ctx.employeeId &&
     String(ctx.employeeId) === employeeId
   )
@@ -68,6 +70,7 @@ function storageOr503(env: Env): ObjectStorage {
 const ser = (d: Record<string, unknown> & { _id: unknown }) => ({
   id: String(d._id),
   employeeId: String(d.employeeId),
+  referenceNo: d.referenceNo ?? null,
   category: d.category,
   title: d.title,
   fileName: d.fileName,
@@ -101,8 +104,11 @@ export function registerDocumentRoutes(v1: Router, env: Env): void {
       const storage = storageOr503(env);
       const ctx = req.tenantCtx!;
       await accessFor(ctx, String(req.params.id));
+      const year = new Date().getUTCFullYear();
+      const seq = await nextSequence(`document:${ctx.tenantId}:${year}`);
       const doc = new EmployeeDocument({
         ...req.body,
+        referenceNo: formatNumber((await numberingFor(ctx.tenantId)).document, seq, `${year}-`),
         fileName: req.body.fileName.replace(/[\\/\0]/g, '_'),
         tenantId: ctx.tenantId,
         employeeId: req.params.id,

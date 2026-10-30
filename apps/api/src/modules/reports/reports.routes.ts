@@ -138,8 +138,8 @@ export function registerReportRoutes(v1: Router, env: Env, deps: { clock: Clock 
 
       let pending: { corrections: number; exceptions: number } | null = null;
       if (
-        hasPermission(ctx.roles, 'attendance:review:all') ||
-        hasPermission(ctx.roles, 'attendance:review:team')
+        hasPermission(ctx, 'attendance:review:all') ||
+        hasPermission(ctx, 'attendance:review:team')
       ) {
         const rscope = await approvalScope(ctx);
         // A reviewer cannot approve their own request, so those are not "waiting on them".

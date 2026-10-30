@@ -24,6 +24,8 @@ const schema = z.object({
   empPadding: z.coerce.number().int().min(1, 'Min 1').max(8, 'Max 8'),
   ltrPrefix: z.string().trim().regex(/^[A-Za-z0-9\-_/]{0,10}$/, 'Up to 10 letters, digits, - _ or /'),
   ltrPadding: z.coerce.number().int().min(1, 'Min 1').max(8, 'Max 8'),
+  docPrefix: z.string().trim().regex(/^[A-Za-z0-9\-_/]{0,10}$/, 'Up to 10 letters, digits, - _ or /'),
+  docPadding: z.coerce.number().int().min(1, 'Min 1').max(8, 'Max 8'),
   allowGpsExceptions: z.boolean(),
   requirePhoto: z.boolean(),
   maxAccuracyMeters: z.coerce.number().int().min(5, 'Min 5').max(500, 'Max 500'),
@@ -53,6 +55,8 @@ export default function SettingsPage() {
       empPadding: t.numbering?.employee.padding ?? 4,
       ltrPrefix: t.numbering?.letter.prefix ?? 'LTR-',
       ltrPadding: t.numbering?.letter.padding ?? 4,
+      docPrefix: t.numbering?.document?.prefix ?? 'DOC-',
+      docPadding: t.numbering?.document?.padding ?? 4,
       allowGpsExceptions: a.allowGpsExceptions ?? true,
       requirePhoto: a.requirePhoto ?? false,
       maxAccuracyMeters: a.maxAccuracyMeters ?? 100,
@@ -79,6 +83,7 @@ export default function SettingsPage() {
           numbering: {
             employee: { prefix: v.empPrefix, padding: v.empPadding },
             letter: { prefix: v.ltrPrefix, padding: v.ltrPadding },
+            document: { prefix: v.docPrefix, padding: v.docPadding },
           },
         },
       }),
@@ -222,10 +227,18 @@ export default function SettingsPage() {
               <Field label="Letter reference digits" error={e.ltrPadding?.message}>
                 {(id, inv) => <Input id={id} type="number" invalid={inv} {...f.register('ltrPadding')} />}
               </Field>
+              <Field label="Document reference prefix" error={e.docPrefix?.message}>
+                {(id, inv) => <Input id={id} invalid={inv} maxLength={10} {...f.register('docPrefix')} />}
+              </Field>
+              <Field label="Document reference digits" error={e.docPadding?.message}>
+                {(id, inv) => <Input id={id} type="number" invalid={inv} {...f.register('docPadding')} />}
+              </Field>
             </div>
             <p className="text-xs text-muted">
               Next employee code looks like{' '}
               <b>{`${(f.watch('empPrefix') ?? '').toUpperCase()}${'1'.padStart(Math.min(Math.max(Number(f.watch('empPadding')) || 4, 1), 8), '0')}`}</b>
+              ; document references like{' '}
+              <b>{`${(f.watch('docPrefix') ?? '').toUpperCase()}${new Date().getFullYear()}-${'1'.padStart(Math.min(Math.max(Number(f.watch('docPadding')) || 4, 1), 8), '0')}`}</b>
               ; letter references like{' '}
               <b>{`${(f.watch('ltrPrefix') ?? '').toUpperCase()}${new Date().getFullYear()}-${'1'.padStart(Math.min(Math.max(Number(f.watch('ltrPadding')) || 4, 1), 8), '0')}`}</b>.
             </p>

@@ -30,8 +30,8 @@ export async function assertCanReview(
   tenant: TenantInfo,
   item: { employeeId: Types.ObjectId; requestedBy?: Types.ObjectId },
 ) {
-  const all = hasPermission(ctx.roles, 'attendance:review:all');
-  const team = hasPermission(ctx.roles, 'attendance:review:team');
+  const all = hasPermission(ctx, 'attendance:review:all');
+  const team = hasPermission(ctx, 'attendance:review:team');
   if (!all && !team) throw AppError.forbidden();
   const own =
     (ctx.employeeId && String(item.employeeId) === String(ctx.employeeId)) ||
@@ -71,10 +71,10 @@ export async function teamScope(
   allPerm: Parameters<typeof hasPermission>[1],
   teamPerm: Parameters<typeof hasPermission>[1],
 ): Promise<Types.ObjectId[] | undefined> {
-  if (hasPermission(ctx.roles, allPerm)) return undefined;
+  if (hasPermission(ctx, allPerm)) return undefined;
   const ids: Types.ObjectId[] = [];
   if (ctx.employeeId) ids.push(ctx.employeeId);
-  if (hasPermission(ctx.roles, teamPerm) && ctx.employeeId) {
+  if (hasPermission(ctx, teamPerm) && ctx.employeeId) {
     const reports = await Employee.find({ tenantId: ctx.tenantId, managerId: ctx.employeeId })
       .select('_id')
       .lean();
@@ -101,7 +101,7 @@ export async function createCorrection(
 ) {
   const tenant = await loadTenant(ctx.tenantId);
   const onBehalf = input.employeeId && String(input.employeeId) !== String(ctx.employeeId);
-  if (onBehalf && !hasPermission(ctx.roles, 'attendance:review:all')) throw AppError.forbidden();
+  if (onBehalf && !hasPermission(ctx, 'attendance:review:all')) throw AppError.forbidden();
   const employeeId = onBehalf ? input.employeeId! : ctx.employeeId;
   if (!employeeId) throw AppError.forbidden('No employee profile is linked to your account');
   const emp = await Employee.findOne({ _id: employeeId, tenantId: ctx.tenantId })
@@ -228,7 +228,7 @@ export async function recordManualAttendance(
   input: CorrectionInput & { employeeId: string },
   now: Date,
 ) {
-  if (!hasPermission(ctx.roles, 'attendance:manual')) throw AppError.forbidden();
+  if (!hasPermission(ctx, 'attendance:manual')) throw AppError.forbidden();
   if (ctx.employeeId && String(input.employeeId) === String(ctx.employeeId))
     throw AppError.forbidden('You cannot record attendance for yourself');
   const tenant = await loadTenant(ctx.tenantId);

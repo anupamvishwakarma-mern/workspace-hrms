@@ -1,5 +1,5 @@
 import type { Types } from 'mongoose';
-import { Employee } from '../../database/models/employee.model';
+import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { LeaveLedger } from '../../database/models/leaveLedger.model';
 import { LeaveRequest } from '../../database/models/leaveRequest.model';
 import { LeaveType } from '../../database/models/leaveType.model';
@@ -14,7 +14,7 @@ export const isCapped = (t: Pick<TypeLike, 'annualAllowanceDays' | 'accrualMode'
   t.accrualMode === 'MONTHLY' || t.annualAllowanceDays > 0;
 
 const round05 = (n: number) => Math.round(n * 2) / 2;
-const ENDED = ['TERMINATED', 'INVITED'];
+const ENDED = [...ENDED_STATUSES, 'INVITED'];
 
 export interface Breakdown {
   base: number;

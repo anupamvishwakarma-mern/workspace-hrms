@@ -2,7 +2,7 @@ import type { Request } from 'express';
 import type { Types } from 'mongoose';
 import { DateTime } from 'luxon';
 import { isApproverFor } from '../attendance/review.service';
-import { Employee } from '../../database/models/employee.model';
+import { Employee, isEnded } from '../../database/models/employee.model';
 import { LeaveRequest } from '../../database/models/leaveRequest.model';
 import { LeaveType } from '../../database/models/leaveType.model';
 import { AppError } from '../../utils/errors';
@@ -145,7 +145,7 @@ export async function applyForLeave(
     .select('workLocationIds joiningDate employmentStatus')
     .lean();
   if (!emp) throw AppError.notFound('Employee not found');
-  if (emp.employmentStatus === 'TERMINATED') throw AppError.forbidden();
+  if (isEnded(emp.employmentStatus)) throw AppError.forbidden();
 
   const days = await chargeableDays(
     tenant,
@@ -298,8 +298,8 @@ export async function reviewLeave(
   now: Date,
 ) {
   // Permission first: someone who may not review at all must not learn whether an id exists.
-  const all = hasPermission(ctx.roles, 'leave:review:all');
-  const team = hasPermission(ctx.roles, 'leave:review:team');
+  const all = hasPermission(ctx, 'leave:review:all');
+  const team = hasPermission(ctx, 'leave:review:team');
   if (!all && !team) throw AppError.forbidden();
   const tenant = await loadTenant(ctx.tenantId);
   const req = await LeaveRequest.findOne({ _id: id, tenantId: ctx.tenantId }).lean();
@@ -358,7 +358,7 @@ export async function cancelLeave(ctx: Ctx, actorUserId: Types.ObjectId, id: str
   const req = await LeaveRequest.findOne({ _id: id, tenantId: ctx.tenantId }).lean();
   if (!req) throw AppError.notFound('Leave request not found');
   const mine = ctx.employeeId && String(req.employeeId) === String(ctx.employeeId);
-  const hr = hasPermission(ctx.roles, 'leave:review:all');
+  const hr = hasPermission(ctx, 'leave:review:all');
   if (!mine && !hr) throw AppError.notFound(); // do not reveal other people's requests
   const today = localDate(now, tenant.timezone);
   if (req.status === 'APPROVED' && !hr && req.startDate < today)

@@ -223,7 +223,7 @@ export function registerLetterRoutes(v1: Router, env: Env, deps: { clock: Clock 
         'date.today': formatLongDate(localDate(deps.clock.now(), tz)),
       };
       if (/\{\{\s*salary\./.test(body)) {
-        if (!hasPermission(ctx.roles, 'payroll:manage'))
+        if (!hasPermission(ctx, 'payroll:manage'))
           throw AppError.forbidden('You cannot use salary placeholders');
         const s = await effectiveStructure(ctx.tenantId, emp._id, localDate(deps.clock.now(), tz));
         if (s) {
@@ -358,7 +358,7 @@ export function registerLetterRoutes(v1: Router, env: Env, deps: { clock: Clock 
       const ctx = req.tenantCtx!;
       const l = await IssuedLetter.findOne({ _id: req.params.id, tenantId: ctx.tenantId }).lean();
       const own = !!l && !!ctx.employeeId && String(l.employeeId) === String(ctx.employeeId);
-      if (!l || !(own || hasPermission(ctx.roles, 'letter:manage')))
+      if (!l || !(own || hasPermission(ctx, 'letter:manage')))
         throw AppError.notFound('Letter not found');
       res.json({ success: true, data: serLetter(l) });
     }),

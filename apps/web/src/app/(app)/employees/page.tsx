@@ -29,13 +29,13 @@ import { useDepartments, useDesignations } from '@/hooks/lookups';
 import { api } from '@/lib/api';
 import { userMessage } from '@/lib/errors';
 import { ROLES, type Employee, type EmployeeDocument, type WorkLocation } from '@/lib/types';
-import { compact, formatDate, label } from '@/lib/utils';
+import { compact, formatDate, isEnded, label } from '@/lib/utils';
 import { BankIds } from './bank-ids';
 import { ChangesTab } from './changes-tab';
 import { ProfileItems } from './profile-items';
 
 const LIMIT = 20;
-const STATUSES = ['INVITED', 'ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED'];
+const STATUSES = ['INVITED', 'ACTIVE', 'ON_LEAVE', 'NOTICE_PERIOD', 'TERMINATED', 'RESIGNED', 'RETIRED'];
 
 export default function EmployeesPage() {
   const { can } = useAuth();
@@ -664,11 +664,13 @@ function Access({ emp }: { emp: Employee }) {
 function Deactivate({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   const [reason, setReason] = useState('');
   const [lastDay, setLastDay] = useState('');
+  const [kind, setKind] = useState('TERMINATED');
   const save = useSave(
     () =>
       api.post(`/employees/${emp.id}/deactivate`, {
         reason: reason.trim(),
         terminate: true,
+        separationType: kind,
         ...(lastDay ? { lastWorkingDate: lastDay } : {}),
       }),
     ['employees', 'employees-lookup', 'dashboard', 'days'],
@@ -678,10 +680,19 @@ function Deactivate({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   return (
     <div className="space-y-3">
       <Alert tone="warn">
-        This ends the employee’s sign-in access and marks them terminated. Attendance history is
-        kept.
+        This ends the employee’s sign-in access and marks their employment as ended. Attendance
+        history is kept.
       </Alert>
       {save.error ? <Alert tone="danger">{save.error}</Alert> : null}
+      <Field label="How employment ended">
+        {(id) => (
+          <Select id={id} value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="RESIGNED">Resigned</option>
+            <option value="RETIRED">Retired</option>
+            <option value="TERMINATED">Terminated</option>
+          </Select>
+        )}
+      </Field>
       <Field label="Reason (required)">
         {(id) => (
           <Textarea
@@ -713,7 +724,7 @@ function Deactivate({ emp, onClose }: { emp: Employee; onClose: () => void }) {
 
 function Offboard({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   const { can } = useAuth();
-  const ended = emp.employmentStatus === 'TERMINATED';
+  const ended = isEnded(emp.employmentStatus);
   return (
     <div className="space-y-6">
       {ended && can('employee:reactivate') ? <Reactivate emp={emp} onClose={onClose} /> : null}
@@ -729,7 +740,7 @@ function Probation({ emp, onClose }: { emp: Employee; onClose: () => void }) {
   const { can } = useAuth();
   const on = emp.probationStatus === 'ON_PROBATION';
   const done = emp.probationStatus === 'CONFIRMED';
-  const ended = emp.employmentStatus === 'TERMINATED';
+  const ended = isEnded(emp.employmentStatus);
   const [end, setEnd] = useState(emp.probationEndDate?.slice(0, 10) ?? '');
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
@@ -998,7 +1009,7 @@ function Documents({ emp }: { emp: Employee }) {
             <span className="min-w-0">
               <span className="block truncate font-medium">{d.title}</span>
               <span className="text-xs text-muted">
-                {label(d.category)} · {(d.sizeBytes / 1024).toFixed(0)} KB ·{' '}
+                {d.referenceNo ? `${d.referenceNo} · ` : ''}{label(d.category)} · {(d.sizeBytes / 1024).toFixed(0)} KB ·{' '}
                 {d.visibleToEmployee ? 'Visible to employee' : 'HR only'}
               </span>
             </span>

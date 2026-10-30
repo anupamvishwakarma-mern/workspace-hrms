@@ -32,7 +32,7 @@ const IDS = [
 const ALL = [...BANK, ...IDS];
 
 /** Bank and statutory identifiers: masked by default, revealing is audited, editing is by someone else only. */
-export function BankIds({ emp }: { emp: Employee }) {
+export function BankIds({ emp }: { emp: Pick<Employee, 'id'> }) {
   const { can, active } = useAuth();
   const canRead = can('employee:sensitive:read');
   const canEdit = can('employee:sensitive:update') && active?.employeeId !== emp.id;

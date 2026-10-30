@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { Env } from '../../config/env';
 import { Counter } from '../../database/models/counter.model';
 import { Department } from '../../database/models/department.model';
-import { Employee } from '../../database/models/employee.model';
+import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { Shift } from '../../database/models/shift.model';
 import { ShiftAssignment } from '../../database/models/shiftAssignment.model';
 import { authenticate, requirePermission, resolveTenant } from '../../middleware/auth';
@@ -305,7 +305,7 @@ export function registerShiftRoutes(v1: Router, env: Env): void {
     asyncHandler(async (req, res) => {
       const q = req.query as unknown as z.infer<typeof assignList>;
       const ctx = req.tenantCtx!;
-      const canManage = hasPermission(ctx.roles, 'shift:manage');
+      const canManage = hasPermission(ctx, 'shift:manage');
       const employeeId = canManage ? q.employeeId : ctx.employeeId;
       if (!canManage && q.employeeId && q.employeeId !== String(ctx.employeeId))
         throw AppError.forbidden();
@@ -368,7 +368,7 @@ export function registerShiftRoutes(v1: Router, env: Env): void {
         const found = await Employee.find({
           tenantId,
           _id: { $in: employeeIds },
-          employmentStatus: { $ne: 'TERMINATED' },
+          employmentStatus: { $nin: ENDED_STATUSES },
         })
           .select('_id')
           .lean();

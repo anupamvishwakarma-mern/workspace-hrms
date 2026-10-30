@@ -1,13 +1,13 @@
 import type { Types } from 'mongoose';
 import { ApprovalDelegation, ApprovalRequest } from '../../database/models/approvalRequest.model';
 import { ApprovalWorkflow } from '../../database/models/approvalWorkflow.model';
-import { Employee } from '../../database/models/employee.model';
+import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { Membership } from '../../database/models/membership.model';
 import { AppError } from '../../utils/errors';
 
 type Id = Types.ObjectId | string;
 const same = (a?: Id | null, b?: Id | null) => !!a && !!b && String(a) === String(b);
-const ENDED = ['TERMINATED'];
+const ENDED = [...ENDED_STATUSES];
 
 interface StepDef {
   approverType: string;

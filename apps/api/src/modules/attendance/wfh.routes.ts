@@ -64,7 +64,7 @@ export function registerWfhRoutes(v1: Router, env: Env, deps: { clock: Clock }):
     asyncHandler(async (req, res) => {
       const ctx = req.tenantCtx!;
       const q = req.query as unknown as z.infer<typeof listQuery>;
-      if (q.scope === 'all' && !hasPermission(ctx.roles, 'attendance:read:all')) throw AppError.forbidden();
+      if (q.scope === 'all' && !hasPermission(ctx, 'attendance:read:all')) throw AppError.forbidden();
       const filter: Record<string, unknown> = {
         tenantId: ctx.tenantId,
         ...(q.scope === 'mine' ? { employeeId: ctx.employeeId ?? null } : {}),

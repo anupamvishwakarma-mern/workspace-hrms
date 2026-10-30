@@ -16,6 +16,8 @@ const employeeDocumentSchema = new Schema(
   {
     tenantId: { type: Schema.Types.ObjectId, required: true },
     employeeId: { type: Schema.Types.ObjectId, required: true },
+    /** e.g. DOC-2026-0001. Absent on documents uploaded before numbering existed. */
+    referenceNo: { type: String },
     category: { type: String, enum: DOCUMENT_CATEGORIES, required: true },
     title: { type: String, required: true, maxlength: 150 },
     fileName: { type: String, required: true, maxlength: 200 },
@@ -31,5 +33,9 @@ const employeeDocumentSchema = new Schema(
   { timestamps: true },
 );
 employeeDocumentSchema.index({ tenantId: 1, employeeId: 1, status: 1, createdAt: -1 });
+employeeDocumentSchema.index(
+  { tenantId: 1, referenceNo: 1 },
+  { unique: true, partialFilterExpression: { referenceNo: { $type: 'string' } } },
+);
 employeeDocumentSchema.index({ status: 1, createdAt: 1 });
 export const EmployeeDocument = tenantModel('EmployeeDocument', employeeDocumentSchema);
