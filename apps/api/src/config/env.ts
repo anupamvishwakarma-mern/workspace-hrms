@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseEncryptionKey } from '../utils/fieldCrypto';
 
 const optionalString = z
   .string()
@@ -50,6 +51,8 @@ const schema = z
     LOCATION_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(90),
     /** Punch proof photos older than this are erased by the nightly purge job (the punch itself is kept). */
     PHOTO_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(90),
+    /** 32-byte key (64 hex characters) that encrypts bank and statutory identifiers. Unset = those endpoints answer 503. */
+    FIELD_ENCRYPTION_KEY: optionalString,
     OBJECT_STORAGE_ENDPOINT: optionalString,
     OBJECT_STORAGE_BUCKET: optionalString,
     OBJECT_STORAGE_REGION: z.string().default('us-east-1'),
@@ -109,6 +112,17 @@ const schema = z
         });
       }
     }
+    if (env.FIELD_ENCRYPTION_KEY) {
+      try {
+        parseEncryptionKey(env.FIELD_ENCRYPTION_KEY);
+      } catch (e) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['FIELD_ENCRYPTION_KEY'],
+          message: (e as Error).message,
+        });
+      }
+    }
     if (env.EMAIL_PROVIDER === 'smtp' && (!env.SMTP_HOST || !env.EMAIL_FROM)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -147,11 +161,11 @@ export function integrationStatus(env: Env): Record<string, IntegrationState> {
     objectStorage: s(
       !!env.LOCAL_STORAGE_DIR ||
         !!(
-        env.OBJECT_STORAGE_ENDPOINT &&
-        env.OBJECT_STORAGE_BUCKET &&
-        env.OBJECT_STORAGE_ACCESS_KEY &&
-        env.OBJECT_STORAGE_SECRET_KEY
-      ),
+          env.OBJECT_STORAGE_ENDPOINT &&
+          env.OBJECT_STORAGE_BUCKET &&
+          env.OBJECT_STORAGE_ACCESS_KEY &&
+          env.OBJECT_STORAGE_SECRET_KEY
+        ),
     ),
     email: s(env.EMAIL_PROVIDER !== 'none'),
     push: s(env.PUSH_PROVIDER !== 'none'),

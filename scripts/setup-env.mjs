@@ -13,7 +13,8 @@ if (existsSync(target)) {
 const secret = () => randomBytes(48).toString('hex');
 const text = readFileSync(join(root, '.env.example'), 'utf8')
   .replace(/^JWT_ACCESS_SECRET=.*$/m, `JWT_ACCESS_SECRET=${secret()}`)
-  .replace(/^REFRESH_TOKEN_SECRET=.*$/m, `REFRESH_TOKEN_SECRET=${secret()}`);
+  .replace(/^REFRESH_TOKEN_SECRET=.*$/m, `REFRESH_TOKEN_SECRET=${secret()}`)
+  .replace(/^FIELD_ENCRYPTION_KEY=.*$/m, `FIELD_ENCRYPTION_KEY=${randomBytes(32).toString('hex')}`);
 writeFileSync(target, text);
 console.log('Created apps/api/.env with generated secrets.');
 console.log(

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { Env } from './config/env';
 import { buildOpenApiSpec } from './docs/openapi';
+import { registerApprovalRoutes } from './modules/approvals/approvals.routes';
 import { registerAuditRoutes } from './modules/audit/audit.routes';
 import { registerAttendanceRoutes } from './modules/attendance/attendance.routes';
 import type { Clock } from './utils/clock';
@@ -19,6 +20,7 @@ import { registerAuthRoutes } from './modules/auth/auth.routes';
 import { registerDesignationRoutes } from './modules/designations/designations.routes';
 import { registerDepartmentRoutes } from './modules/departments/departments.routes';
 import { registerDocumentRoutes } from './modules/documents/documents.routes';
+import { registerSensitiveRoutes } from './modules/employees/sensitive.routes';
 import { registerEmployeeRoutes } from './modules/employees/employees.routes';
 import { registerHealthRoutes } from './modules/health/health.routes';
 import { registerNotificationRoutes } from './modules/notifications/notifications.routes';
@@ -33,7 +35,9 @@ export function createV1Router(env: Env, deps: { clock: Clock }): Router {
   registerTenantRoutes(v1, env);
   registerDepartmentRoutes(v1, env);
   registerDesignationRoutes(v1, env);
+  registerApprovalRoutes(v1, env);
   registerEmployeeRoutes(v1, env);
+  registerSensitiveRoutes(v1, env);
   registerLocationRoutes(v1, env);
   registerShiftRoutes(v1, env);
   registerHolidayRoutes(v1, env);

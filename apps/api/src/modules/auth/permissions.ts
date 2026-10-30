@@ -17,6 +17,8 @@ export type Permission =
   | 'department:manage'
   | 'designation:read'
   | 'designation:manage'
+  | 'approval:use' // raise requests, act on requests assigned to you
+  | 'approval:manage' // define workflows, see all requests
   | 'attendance:punch'
   | 'attendance:read:self'
   | 'attendance:read:all' // daily summaries (no GPS/event detail)
@@ -31,6 +33,8 @@ export type Permission =
   | 'holiday:read'
   | 'holiday:manage'
   | 'employee:reactivate'
+  | 'employee:sensitive:read' // masked bank/statutory data of others; full values are audited
+  | 'employee:sensitive:update'
   | 'employee:confirm' // confirm an employee after probation
   | 'audit:read'
   | 'leave:apply' // own requests and balances
@@ -59,6 +63,7 @@ const COMMON: Permission[] = [
   'payroll:read:self',
   'letter:read:self',
   'handbook:read',
+  'approval:use',
 ];
 
 const HR_PERMS: Permission[] = [
@@ -84,6 +89,8 @@ const HR_PERMS: Permission[] = [
   'holiday:manage',
   'employee:reactivate',
   'employee:confirm',
+  'employee:sensitive:read',
+  'employee:sensitive:update',
   'audit:read',
   'leave:read:all',
   'leave:review:all',
@@ -92,6 +99,7 @@ const HR_PERMS: Permission[] = [
   'payroll:manage',
   'letter:manage',
   'handbook:manage',
+  'approval:manage',
 ];
 
 export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {

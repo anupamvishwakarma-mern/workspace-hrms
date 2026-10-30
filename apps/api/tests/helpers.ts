@@ -29,6 +29,7 @@ export function testEnv(overrides: Record<string, string> = {}): Env {
     REFRESH_TOKEN_SECRET: 'test-refresh-secret-test-refresh-secret-0000',
     RATE_LIMIT_LOGIN_MAX: '10000',
     RATE_LIMIT_SENSITIVE_MAX: '10000',
+    FIELD_ENCRYPTION_KEY: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff',
     ...overrides,
   });
 }
