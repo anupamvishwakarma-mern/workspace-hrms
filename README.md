@@ -61,6 +61,14 @@ Sign in with `owner@demo.test` / `hr@demo.test` / `manager@demo.test` (seeded). 
 pnpm --filter @workforce/api worker    # needs REDIS_URL; see docs/PHASE6.md
 ```
 
+## Marketing website
+
+`apps/marketing` is the public marketing site (features, pricing, database hosting, demo booking, free trial that hands off to the existing signup API). See [docs/MARKETING_SITE.md](docs/MARKETING_SITE.md). Run with `pnpm --filter @workforce/marketing dev` (port 3001).
+
+## Database hosting (managed or customer-owned MongoDB)
+
+Companies choose at signup between the platform-managed database and their own MongoDB. See [docs/DATABASE_HOSTING.md](docs/DATABASE_HOSTING.md) for architecture, env vars (`TENANT_DB_ENCRYPTION_KEYS`, `CUSTOMER_DB_*`), key rotation and limits.
+
 ## Deployment and security
 
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (infrastructure, environment checklist, first deployment, operations) and [docs/SECURITY.md](docs/SECURITY.md) (controls, findings, residual risks). Example Dockerfiles and a compose file live in `deploy/`.

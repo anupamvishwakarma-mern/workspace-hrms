@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import mongoose, { type Types } from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
 import type { Env } from '../../config/env';
@@ -11,8 +11,15 @@ import { Shift } from '../../database/models/shift.model';
 import { ShiftAssignment } from '../../database/models/shiftAssignment.model';
 import { Tenant } from '../../database/models/tenant.model';
 import { User } from '../../database/models/user.model';
-import { runInTenantDb } from '../../database/tenantContext';
-import { modelForDb, tenantModelNames } from '../../database/tenantModel';
+import { HostingError, classifyMongoError, safeErrorMessage } from '../../database/hosting/errors';
+import { initializeSchema } from '../../database/hosting/initialize';
+import { tenantDatabaseManager } from '../../database/hosting/manager';
+import { LATEST_SCHEMA_VERSION, migrateTenantDatabase } from '../../database/hosting/migrations';
+import { parseMongoUri } from '../../database/hosting/connectionString';
+import { encryptConnectionString } from '../../database/hosting/secrets';
+import { openCustomerConnection, verifyCustomerDatabase } from '../../database/hosting/verify';
+import { recordDbEvent } from '../../database/models/tenantDbEvent.model';
+import { runInTenantDb, runInTenantScope } from '../../database/tenantContext';
 import { AppError } from '../../utils/errors';
 import { isDuplicateKey } from '../../utils/mongo';
 import { issueOneTimeToken } from '../auth/token.service';
@@ -51,6 +58,23 @@ export const ownerSchema = z
   })
   .strict();
 
+/**
+ * Where the company's HRMS data will live. MANAGED needs nothing else. CUSTOMER_OWNED carries the customer's MongoDB
+ * connection string, which is verified, encrypted and never returned by any API.
+ */
+export const databaseSelection = z.discriminatedUnion('hostingMode', [
+  z.object({ hostingMode: z.literal('MANAGED') }).strict(),
+  z
+    .object({
+      hostingMode: z.literal('CUSTOMER_OWNED'),
+      connectionString: z.string().trim().min(10).max(2048),
+      /** Only needed when the connection string does not name a database. */
+      databaseName: z.string().trim().min(1).max(60).optional(),
+    })
+    .strict(),
+]);
+export type DatabaseSelection = z.infer<typeof databaseSelection>;
+
 export const onboardBody = z
   .object({
     name: z.string().trim().min(2).max(200),
@@ -60,11 +84,14 @@ export const onboardBody = z
     /** Number of members (employees) the company will have: enforced as a hard seat limit. */
     maxEmployees: z.number().int().min(1).max(MAX_MEMBERS),
     owner: ownerSchema,
+    /** Omitted = MANAGED (the HRMS-managed database), so existing clients keep working. */
+    database: databaseSelection.default({ hostingMode: 'MANAGED' }),
   })
   .strict();
-export type OnboardInput = Omit<z.infer<typeof onboardBody>, 'maxEmployees'> & {
+export type OnboardInput = Omit<z.infer<typeof onboardBody>, 'maxEmployees' | 'database'> & {
   /** Omitted = unlimited (platform operators only; public signup always sets it). */
   maxEmployees?: number;
+  database?: DatabaseSelection;
 };
 
 /** "acme-corp" -> "ACME_CORP_HRM" */
@@ -81,17 +108,9 @@ export function slugFromName(name: string): string {
   return base.length >= 3 ? base : `${base || 'company'}-hrm`.slice(0, 32);
 }
 
-/** Creates the collections and indexes of a brand-new company database. */
+/** Creates the collections and indexes of a brand-new company database on the managed cluster. */
 export async function createTenantDatabase(dbName: string): Promise<void> {
-  for (const name of tenantModelNames()) {
-    const m = modelForDb(dbName, name);
-    try {
-      await m.createCollection();
-    } catch (e) {
-      if ((e as { code?: number }).code !== 48) throw e; // 48 = already exists
-    }
-    await m.init();
-  }
+  await initializeSchema(mongoose.connection.useDb(dbName, { useCache: true }));
 }
 
 export async function dropTenantDatabase(dbName: string): Promise<void> {
@@ -121,20 +140,100 @@ const DEFAULT_LEAVE_TYPES = [
 
 export interface ProvisionResult {
   tenantId: Types.ObjectId;
-  dbName: string;
+  /** Managed companies only (customer-owned database names are not exposed here). */
+  dbName?: string;
+  hostingMode: 'MANAGED' | 'CUSTOMER_OWNED';
   slug: string;
   ownerStatus: string;
   /** Activation link for the owner (set only while the owner still has to activate). */
   activationLink?: string;
 }
 
+interface SeedInput {
+  tenantId: Types.ObjectId;
+  userId: Types.ObjectId;
+  userStatus: string;
+  empId: Types.ObjectId;
+  owner: OnboardInput['owner'];
+  timezone: string;
+  createdByUserId?: Types.ObjectId;
+  session: mongoose.ClientSession;
+}
+
 /**
- * Onboards a company end to end:
- *  1. creates its own MongoDB database (<SLUG>_HRM) with all collections and indexes;
+ * The company-owned data of a new company (owner employee, default leave types, default shift). Must run inside the
+ * company's database scope. Identical for managed and customer-owned hosting.
+ */
+async function seedCompanyData(i: SeedInput): Promise<void> {
+  const { tenantId, session } = i;
+  await Employee.create(
+    [
+      {
+        _id: i.empId,
+        tenantId,
+        userId: i.userId,
+        employeeCode: 'EMP-0001',
+        firstName: i.owner.firstName,
+        lastName: i.owner.lastName,
+        workEmail: i.owner.email,
+        employmentStatus: i.userStatus === 'ACTIVE' ? 'ACTIVE' : 'INVITED',
+        history: [{ type: 'CREATED', byUserId: i.createdByUserId }],
+      },
+    ],
+    { session },
+  );
+  // Employee codes continue after EMP-0001.
+  await Counter.updateOne({ _id: `employee:${tenantId}` }, { $set: { seq: 1 } }, { upsert: true, session });
+  await LeaveType.create(
+    DEFAULT_LEAVE_TYPES.map((l) => ({ ...l, tenantId })),
+    { session, ordered: true },
+  );
+  const [shift] = await Shift.create(
+    [
+      {
+        tenantId,
+        name: 'General 09:00-18:00',
+        startTime: '09:00',
+        endTime: '18:00',
+        graceMinutes: 10,
+        earlyDepartureGraceMinutes: 5,
+        breakPolicy: { type: 'RECORDED', expectedUnpaidMinutes: 60 },
+        weeklyOffDays: [0, 6],
+      },
+    ],
+    { session },
+  );
+  await ShiftAssignment.create(
+    [
+      {
+        tenantId,
+        employeeId: i.empId,
+        shiftId: shift!._id,
+        effectiveFrom: DateTime.now().setZone(i.timezone).toISODate()!,
+        assignedBy: i.createdByUserId,
+      },
+    ],
+    { session },
+  );
+}
+
+/**
+ * Onboards a company end to end. The hosting choice decides only where its data lives:
+ *
+ * MANAGED (default; the original flow)
+ *  1. creates its own database (<SLUG>_HRM) on our cluster with all collections and indexes;
  *  2. in one transaction: tenant record (with its seat limit), owner login, owner employee, COMPANY_OWNER membership,
  *     default leave types, a default Mon-Fri 09:00-18:00 shift assigned to the owner;
- *  3. emails the owner an activation link.
- * If anything fails the transaction is rolled back and the new database is dropped, so nothing is left half-made.
+ *  3. emails the owner an activation link. If anything fails the transaction is rolled back and the database dropped.
+ *
+ * CUSTOMER_OWNED
+ *  1. verifies the customer's database (SSRF policy, TLS, auth, version, replica set, permissions, emptiness);
+ *  2. records the company (suspended until ready) with the ENCRYPTED connection string, owner login and membership
+ *     in the control-plane database;
+ *  3. creates collections/indexes in the customer's database through the migration system and seeds the same default
+ *     data in a transaction on THEIR cluster (a transaction cannot span two clusters);
+ *  4. only then marks the database READY and activates the company; on any failure the control-plane records and
+ *     anything seeded are removed. The customer's database itself is never dropped.
  */
 export async function provisionTenant(
   env: Env,
@@ -155,8 +254,51 @@ export async function provisionTenant(
       'EMAIL_IN_USE',
       'An account with this email already exists. Sign in instead, or use a different email.',
     );
+  const selection: DatabaseSelection = input.database ?? { hostingMode: 'MANAGED' };
   const slug = await resolveSlug(input);
+
+  const done =
+    selection.hostingMode === 'CUSTOMER_OWNED'
+      ? await provisionCustomerOwned(input, slug, selection, createdByUserId)
+      : await provisionManaged(input, slug, createdByUserId);
+
+  let activationLink: string | undefined;
+  if (done.ownerStatus === 'INVITED') {
+    const raw = await issueOneTimeToken(env, done.ownerUserId, 'ACTIVATION', env.INVITE_TTL_HOURS * 3_600_000);
+    activationLink = `${env.WEB_APP_URL}/activate?token=${raw}`;
+    await sendEmail(env, {
+      tenantId: done.tenantId,
+      to: owner.email,
+      template: 'ACTIVATION',
+      subject: `Your ${input.name} workspace is ready`,
+      link: activationLink,
+    });
+  }
+  return {
+    tenantId: done.tenantId,
+    dbName: done.dbName,
+    hostingMode: selection.hostingMode,
+    slug,
+    ownerStatus: done.ownerStatus,
+    activationLink,
+  };
+}
+
+interface Provisioned {
+  tenantId: Types.ObjectId;
+  ownerUserId: Types.ObjectId;
+  ownerStatus: string;
+  dbName?: string;
+}
+
+async function provisionManaged(
+  input: OnboardInput,
+  slug: string,
+  createdByUserId: Types.ObjectId | undefined,
+): Promise<Provisioned> {
+  const { owner } = input;
   const dbName = dbNameForSlug(slug);
+  const settings = tenantDatabaseManager.getSettings();
 
   let databaseCreated = false;
   const session = await mongoose.startSession();
@@ -176,6 +318,15 @@ export async function provisionTenant(
             dbName,
             maxEmployees: input.maxEmployees,
             settings: { attendance: { requirePhoto: true } },
+            database: {
+              hostingMode: 'MANAGED',
+              provider: 'MONGODB',
+              status: 'READY',
+              clusterId: settings.managedClusterId,
+              databaseName: dbName,
+              schemaVersion: LATEST_SCHEMA_VERSION,
+              health: 'HEALTHY',
+            },
           },
         ],
         { session },
@@ -185,64 +336,14 @@ export async function provisionTenant(
       user ??= (await User.create([{ email: owner.email, status: 'INVITED' }], { session }))[0]!;
       ownerUserId = user._id;
       ownerStatus = user.status;
-      await runInTenantDb(dbName, async () => {
-        const [emp] = await Employee.create(
-          [
-            {
-              tenantId,
-              userId: user._id,
-              employeeCode: 'EMP-0001',
-              firstName: owner.firstName,
-              lastName: owner.lastName,
-              workEmail: owner.email,
-              employmentStatus: user.status === 'ACTIVE' ? 'ACTIVE' : 'INVITED',
-              history: [{ type: 'CREATED', byUserId: createdByUserId }],
-            },
-          ],
-          { session },
-        );
-        await Membership.create(
-          [{ tenantId, userId: user._id, roles: ['COMPANY_OWNER'], employeeId: emp!._id }],
-          { session },
-        );
-        // Employee codes continue after EMP-0001.
-        await Counter.updateOne(
-          { _id: `employee:${tenantId}` },
-          { $set: { seq: 1 } },
-          { upsert: true, session },
-        );
-        await LeaveType.create(
-          DEFAULT_LEAVE_TYPES.map((l) => ({ ...l, tenantId })),
-          { session, ordered: true },
-        );
-        const [shift] = await Shift.create(
-          [
-            {
-              tenantId,
-              name: 'General 09:00-18:00',
-              startTime: '09:00',
-              endTime: '18:00',
-              graceMinutes: 10,
-              earlyDepartureGraceMinutes: 5,
-              breakPolicy: { type: 'RECORDED', expectedUnpaidMinutes: 60 },
-              weeklyOffDays: [0, 6],
-            },
-          ],
-          { session },
-        );
-        await ShiftAssignment.create(
-          [
-            {
-              tenantId,
-              employeeId: emp!._id,
-              shiftId: shift!._id,
-              effectiveFrom: DateTime.now().setZone(input.timezone).toISODate()!,
-              assignedBy: createdByUserId,
-            },
-          ],
-          { session },
-        );
-      });
+      const empId = new Types.ObjectId();
+      await Membership.create(
+        [{ tenantId, userId: user._id, roles: ['COMPANY_OWNER'], employeeId: empId }],
+        { session },
+      );
+      await runInTenantDb(dbName, () =>
+        seedCompanyData({ tenantId, userId: user._id, userStatus: user.status, empId, owner, timezone: input.timezone, createdByUserId, session }),
+      );
     });
   } catch (err) {
     if (databaseCreated) await dropTenantDatabase(dbName).catch(() => undefined);
@@ -251,23 +352,149 @@ export async function provisionTenant(
   } finally {
     await session.endSession();
   }
+  return { tenantId, ownerUserId, ownerStatus, dbName };
+}
 
-  let activationLink: string | undefined;
-  if (ownerStatus === 'INVITED') {
-    const raw = await issueOneTimeToken(
-      env,
-      ownerUserId,
-      'ACTIVATION',
-      env.INVITE_TTL_HOURS * 3_600_000,
+async function provisionCustomerOwned(
+  input: OnboardInput,
+  slug: string,
+  selection: Extract<DatabaseSelection, { hostingMode: 'CUSTOMER_OWNED' }>,
+  createdByUserId: Types.ObjectId | undefined,
+): Promise<Provisioned> {
+  const { owner } = input;
+  const settings = tenantDatabaseManager.getSettings();
+  const ring = settings.keyRing;
+  if (!settings.customerOwnedEnabled || !ring)
+    throw new HostingError('CUSTOMER_DB_DISABLED', 'Customer-owned databases are not enabled on this platform. Choose the HRMS-managed database.');
+
+  // 1. Verify everything on a throwaway connection before anything is written anywhere.
+  const verified = await verifyCustomerDatabase(settings, {
+    connectionString: selection.connectionString,
+    databaseName: selection.databaseName,
+  });
+  if (await Tenant.exists({ 'database.connectionConfig.fingerprint': verified.fingerprint }))
+    throw new HostingError('DATABASE_IN_USE', 'This database is already in use by an HRMS company. Choose an empty database.');
+
+  const tenantId = new Types.ObjectId();
+  const empId = new Types.ObjectId();
+  const encrypted = encryptConnectionString(ring, String(tenantId), selection.connectionString);
+  const parsed = parseMongoUri(selection.connectionString);
+  const conn = await openCustomerConnection(settings, selection.connectionString, verified.databaseName, parsed);
+
+  let ownerUserId!: Types.ObjectId;
+  let ownerStatus!: string;
+  let userCreated = false;
+  try {
+    // 2. Control plane: the company (suspended and PROVISIONING until the customer database is ready), owner, membership.
+    const control = await mongoose.startSession();
+    try {
+      await control.withTransaction(async () => {
+        await Tenant.create(
+          [
+            {
+              _id: tenantId,
+              name: input.name,
+              slug,
+              status: 'SUSPENDED',
+              timezone: input.timezone,
+              maxEmployees: input.maxEmployees,
+              settings: { attendance: { requirePhoto: true } },
+              database: {
+                hostingMode: 'CUSTOMER_OWNED',
+                provider: 'MONGODB',
+                status: 'PROVISIONING',
+                databaseName: verified.databaseName,
+                connectionConfig: { ...encrypted, fingerprint: verified.fingerprint, updatedAt: new Date() },
+                health: 'UNKNOWN',
+              },
+            },
+          ],
+          { session: control },
+        );
+        let user = await User.findOne({ email: owner.email }).session(control);
+        if (!user) {
+          user = (await User.create([{ email: owner.email, status: 'INVITED' }], { session: control }))[0]!;
+          userCreated = true;
+        }
+        ownerUserId = user._id;
+        ownerStatus = user.status;
+        await Membership.create(
+          [{ tenantId, userId: user._id, roles: ['COMPANY_OWNER'], employeeId: empId }],
+          { session: control },
+        );
+      });
+    } finally {
+      await control.endSession();
+    }
+
+    // 3. Customer database: schema through the migration system, then the default data in a transaction on THEIR cluster.
+    const migrated = await migrateTenantDatabase(String(tenantId), conn);
+    if (migrated.status === 'FAILED')
+      throw new HostingError('VERIFICATION_FAILED', migrated.error ?? 'The database schema could not be created.');
+    const seed = await conn.startSession();
+    try {
+      await seed.withTransaction(() =>
+        runInTenantScope({ connection: conn }, () =>
+          seedCompanyData({ tenantId, userId: ownerUserId, userStatus: ownerStatus, empId, owner, timezone: input.timezone, createdByUserId, session: seed }),
+        ),
+      );
+    } finally {
+      await seed.endSession();
+    }
+
+    // 4. Ready: activate the company.
+    const now = new Date();
+    await Tenant.updateOne(
+      { _id: tenantId },
+      {
+        $set: {
+          status: 'ACTIVE',
+          'database.status': 'READY',
+          'database.health': 'HEALTHY',
+          'database.lastConnectionCheck': now,
+          'database.lastSuccessfulConnection': now,
+        },
+      },
     );
-    activationLink = `${env.WEB_APP_URL}/activate?token=${raw}`;
-    await sendEmail(env, {
-      tenantId,
-      to: owner.email,
-      template: 'ACTIVATION',
-      subject: `Your ${input.name} workspace is ready`,
-      link: activationLink,
-    });
+    await recordDbEvent({ tenantId, type: 'PROVISIONED', ok: true, actorUserId: createdByUserId, detail: { hostingMode: 'CUSTOMER_OWNED', databaseName: verified.databaseName, serverVersion: verified.serverVersion } });
+  } catch (err) {
+    await compensateCustomerProvisioning({ tenantId, conn, userCreated, ownerUserId });
+    await recordDbEvent({ tenantId, type: 'PROVISION_FAILED', ok: false, actorUserId: createdByUserId, detail: { error: safeErrorMessage(err) } });
+    if (isDuplicateKey(err)) {
+      const key = JSON.stringify((err as { keyPattern?: unknown }).keyPattern ?? {});
+      if (key.includes('fingerprint')) throw new HostingError('DATABASE_IN_USE', 'This database is already in use by an HRMS company. Choose an empty database.');
+      throw AppError.conflict('A company with this slug already exists');
+    }
+    throw err instanceof AppError ? err : classifyMongoError(err);
+  } finally {
+    await conn.close().catch(() => undefined);
   }
-  return { tenantId, dbName, slug, ownerStatus, activationLink };
+  return { tenantId, ownerUserId, ownerStatus };
+}
+
+/**
+ * Undoes a failed customer-owned onboarding: control-plane records go; documents WE seeded (all carry this company's
+ * tenantId) and our binding marker are removed from the customer's database. The database and its collections are
+ * left in place and are never dropped, so a retry finds it empty again.
+ */
+async function compensateCustomerProvisioning(c: {
+  tenantId: Types.ObjectId;
+  conn: mongoose.Connection;
+  userCreated: boolean;
+  ownerUserId?: Types.ObjectId;
+}): Promise<void> {
+  try {
+    await runInTenantScope({ connection: c.conn }, async () => {
+      for (const M of [Employee, Counter, LeaveType, Shift, ShiftAssignment] as const) {
+        const filter = M === Counter ? { _id: `employee:${c.tenantId}` } : { tenantId: c.tenantId };
+        await (M as unknown as mongoose.Model<unknown>).deleteMany(filter as never).catch(() => undefined);
+      }
+    });
+    await c.conn.db!.collection('_hrms_meta').deleteOne({ _id: 'binding' as never, tenantId: String(c.tenantId) } as never).catch(() => undefined);
+  } catch {
+    /* best effort: the customer's data is never touched beyond what we seeded */
+  }
+  await Membership.deleteMany({ tenantId: c.tenantId }).catch(() => undefined);
+  if (c.userCreated && c.ownerUserId) await User.deleteOne({ _id: c.ownerUserId, status: 'INVITED' }).catch(() => undefined);
+  await Tenant.deleteOne({ _id: c.tenantId, 'database.hostingMode': 'CUSTOMER_OWNED', status: 'SUSPENDED' }).catch(() => undefined);
 }

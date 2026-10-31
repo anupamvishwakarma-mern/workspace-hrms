@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import type { Logger } from 'pino';
+import { redactSecrets } from '../database/hosting/errors';
 import { AppError } from '../utils/errors';
 
 export const notFoundHandler: RequestHandler = (req, res) => {
@@ -59,7 +60,12 @@ export function createErrorHandler(logger: Logger): ErrorRequestHandler {
       return;
     }
     // Unknown error: log full detail server-side, return a safe message.
-    logger.error({ err, requestId: req.id }, 'Unhandled error');
+    // Driver errors can echo a connection string: redact credentials before anything reaches the logs.
+    const safe =
+      err instanceof Error
+        ? Object.assign(new Error(redactSecrets(err.message)), { name: err.name, stack: err.stack ? redactSecrets(err.stack) : undefined })
+        : err;
+    logger.error({ err: safe, requestId: req.id }, 'Unhandled error');
     res.status(500).json({
       success: false,
       error: { code: 'INTERNAL_ERROR', message: 'An unexpected error occurred' },

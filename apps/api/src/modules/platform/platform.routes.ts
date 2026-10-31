@@ -9,10 +9,10 @@ import { asyncHandler } from '../../utils/asyncHandler';
 import { AppError } from '../../utils/errors';
 import { route } from '../../utils/route';
 import { idParams, paginationQuery, validate } from '../../utils/validate';
-import { writeAudit } from '../audit/audit.service';
-import { runInTenantDb } from '../../database/tenantContext';
+import { writeAudit, writeTenantAudit } from '../audit/audit.service';
 import { runInTenant } from '../../database/tenantDb';
 import { MAX_MEMBERS, onboardBody, provisionTenant } from '../tenants/provisioning';
+import { registerPlatformDatabaseRoutes } from './platform.database';
 import { registerPlatformInsights } from './platform.insights';
 import { serializeTenant } from '../tenants/tenants.routes';
 import { MODULES, MODULE_DEPENDENCIES, MODULE_KEYS, checkModuleSet, enabledModules } from '../tenants/modules';
@@ -69,15 +69,13 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
       const out = await provisionTenant(env, onboard as never, { createdByUserId: req.auth!.userId });
       if (modules) await Tenant.updateOne({ _id: out.tenantId }, { $set: { modules: [...new Set(modules)] } });
       const tenant = await Tenant.findById(out.tenantId).lean();
-      await runInTenantDb(out.dbName, () =>
-        writeAudit(req, {
+      await writeTenantAudit(req, out.tenantId, {
           action: 'platform.tenant_create',
           entityType: 'Tenant',
           entityId: out.tenantId,
           tenantId: out.tenantId,
           after: tenant,
-        }),
-      );
+      });
       res.status(201).json({ success: true, data: serializeTenant(tenant!) });
     }),
   );
@@ -175,16 +173,14 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
         { $set: { maxEmployees } },
         { new: true },
       ).lean();
-      await runInTenantDb(before.dbName ?? undefined, () =>
-        writeAudit(req, {
+      await writeTenantAudit(req, before._id, {
           action: 'platform.tenant_seats',
           entityType: 'Tenant',
           entityId: before._id,
           tenantId: before._id,
           before: { maxEmployees: before.maxEmployees },
           after: { maxEmployees },
-        }),
-      );
+      });
       res.json({ success: true, data: serializeTenant(after!) });
     }),
   );
@@ -233,8 +229,7 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
       const bad = checkModuleSet(next);
       if (bad) throw AppError.unprocessable(bad);
       const after = await Tenant.findByIdAndUpdate(before._id, { $set: { modules: next } }, { new: true }).lean();
-      await runInTenantDb(before.dbName ?? undefined, () =>
-        writeAudit(req, {
+      await writeTenantAudit(req, before._id, {
           action: 'platform.tenant_modules',
           entityType: 'Tenant',
           entityId: before._id,
@@ -242,11 +237,11 @@ export function registerPlatformRoutes(v1: Router, env: Env): void {
           before: { modules: enabledModules(before.modules as string[] | undefined) },
           after: { modules: next },
           reason,
-        }),
-      );
+      });
       res.json({ success: true, data: serializeTenant(after!) });
     }),
   );
 
   registerPlatformInsights(v1, env);
+  registerPlatformDatabaseRoutes(v1, env);
 }

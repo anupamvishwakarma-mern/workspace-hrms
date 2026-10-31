@@ -19,6 +19,10 @@ import {
 } from '../../utils/security';
 import { sendEmail } from '../notifications/email.service';
 import { loadExtraPermissions } from './customRoles';
+import type { Permission } from './permissions';
+import { HostingError } from '../../database/hosting/errors';
+import { tenantDatabaseManager } from '../../database/hosting/manager';
+import { TENANT_DB_FIELDS } from '../../database/hosting/source';
 import { permissionsFor } from './permissions';
 import { consumeOneTimeToken, issueOneTimeToken } from './token.service';
 
@@ -58,21 +62,29 @@ async function createSession(
 export async function listMemberships(userId: Types.ObjectId) {
   const memberships = await Membership.find({ userId, status: 'ACTIVE' }).lean();
   const tenants = await Tenant.find({ _id: { $in: memberships.map((m) => m.tenantId) } })
-    .select('name slug status modules dbName')
+    .select(`name slug status modules ${TENANT_DB_FIELDS}`)
     .lean();
   return Promise.all(memberships.map(async (m) => {
     const t = tenants.find((x) => String(x._id) === String(m.tenantId));
-    const extra = await loadExtraPermissions(
-      t?.dbName ?? undefined,
-      m.tenantId,
-      m.customRoleIds,
-      t?.modules,
-    );
+    // Custom-role permissions live in the company database. If that database is unreachable (a customer-owned one
+    // can be), still list the company so the person sees a clear service status instead of an empty account.
+    let extra = new Set<Permission>();
+    let databaseAvailable = true;
+    if (t) {
+      try {
+        const scope = await tenantDatabaseManager.scopeFor(t, { allowInactive: true });
+        extra = await loadExtraPermissions(scope, m.tenantId, m.customRoleIds, t.modules);
+      } catch (e) {
+        if (!(e instanceof HostingError)) throw e;
+        databaseAvailable = false;
+      }
+    }
     return {
       tenantId: String(m.tenantId),
       tenantName: t?.name,
       tenantSlug: t?.slug,
       tenantStatus: t?.status,
+      databaseAvailable,
       roles: m.roles,
       // For hiding UI the person cannot use. Cosmetic only: the server re-checks every request.
       permissions: [...new Set([...permissionsFor(m.roles), ...extra])]
@@ -283,6 +295,7 @@ export async function activateAccount(
   // Each company keeps its employees in its own database, so activate the user's record in every company they belong to.
   const memberships = await Membership.find({ userId }).select('tenantId').lean();
   for (const m of memberships) {
+    try {
     await runInTenant(m.tenantId, () =>
       Employee.updateMany(
         { tenantId: m.tenantId, userId, employmentStatus: 'INVITED' },
@@ -299,6 +312,10 @@ export async function activateAccount(
         },
       ),
     );
+    } catch (e) {
+      // The password is already set; one company's unreachable (customer-owned) database must not block activation.
+      if (!(e instanceof HostingError)) throw e;
+    }
   }
   return userId;
 }

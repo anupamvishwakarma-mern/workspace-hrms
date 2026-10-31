@@ -75,3 +75,8 @@ Generate secrets with `openssl rand -base64 48` (one for each of `JWT_ACCESS_SEC
 | Document upload fails in the browser                | `STORAGE_ORIGIN` missing at web build (CSP) or bucket CORS missing |
 | Everyone shares one rate-limit bucket               | proxy not setting `X-Forwarded-For`, or more than one proxy hop    |
 | Worker exits at start                               | `REDIS_URL` not set                                                |
+
+
+## Customer-owned databases
+
+Set `TENANT_DB_ENCRYPTION_KEYS` on both API and worker before enabling the option; back the key up separately from the database. See DATABASE_HOSTING.md for rotation and firewall notes.

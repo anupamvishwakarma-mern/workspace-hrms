@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import type { Logger } from 'pino';
 import type { Env } from './config/env';
+import { tenantDatabaseManager } from './database/hosting/manager';
 import { createErrorHandler, notFoundHandler } from './middleware/errorHandler';
 import { requestId } from './middleware/requestId';
 import cookieParser from 'cookie-parser';
@@ -13,6 +14,7 @@ import { createV1Router } from './routes';
 import { systemClock, type Clock } from './utils/clock';
 
 export function createApp(env: Env, logger: Logger, deps: { clock?: Clock } = {}): Express {
+  tenantDatabaseManager.configure(env, logger);
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', env.NODE_ENV === 'production' ? 1 : false);

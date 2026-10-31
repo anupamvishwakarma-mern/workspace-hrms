@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import type { Logger } from 'pino';
+import { Tenant } from './models/tenant.model';
+import { tenantDatabaseManager } from './hosting/manager';
 
 export async function connectDatabase(uri: string, logger: Logger): Promise<typeof mongoose> {
   mongoose.set('strictQuery', true);
@@ -21,7 +23,35 @@ export async function connectDatabase(uri: string, logger: Logger): Promise<type
 }
 
 export async function disconnectDatabase(): Promise<void> {
+  await tenantDatabaseManager.closeAll(); // customer-owned connections first
   await mongoose.disconnect();
+}
+
+/**
+ * Companies created before hosting modes existed have no `database` block. The database manager refuses such a record
+ * (it will not guess where the data lives), so give them an explicit MANAGED configuration once at start-up.
+ * Idempotent and touches only records that lack the block.
+ */
+export async function backfillTenantDatabaseConfig(clusterId: string): Promise<number> {
+  const legacy = await Tenant.find({ database: { $exists: false } }).select('_id dbName').lean();
+  for (const t of legacy)
+    await Tenant.updateOne(
+      { _id: t._id, database: { $exists: false } },
+      {
+        $set: {
+          database: {
+            hostingMode: 'MANAGED',
+            provider: 'MONGODB',
+            status: 'READY',
+            clusterId,
+            databaseName: t.dbName ?? undefined,
+            health: 'UNKNOWN',
+            consecutiveFailures: 0,
+          },
+        },
+      },
+    );
+  return legacy.length;
 }
 
 /** Returns true when MongoDB answers a ping. */

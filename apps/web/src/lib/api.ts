@@ -128,6 +128,9 @@ export class ApiClient {
   postPublic = <T>(path: string, body: unknown) =>
     this.raw<T>('POST', path, { body, auth: false, tenant: false });
 
+  /** Unauthenticated read (signup options). */
+  getPublic = <T>(path: string) => this.raw<T>('GET', path, { auth: false, tenant: false });
+
   /** Authenticated file download (CSV). Returns the blob and the server-suggested filename. */
   async download(
     path: string,

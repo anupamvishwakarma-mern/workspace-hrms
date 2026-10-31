@@ -1,8 +1,9 @@
 import type { Request } from 'express';
 import type { Types } from 'mongoose';
+import { tenantDatabaseManager } from '../../database/hosting/manager';
 import { AuditLog } from '../../database/models/auditLog.model';
 
-const SENSITIVE_KEYS = /password|hash|token|secret/i;
+const SENSITIVE_KEYS = /password|hash|token|secret|connectionstring|encrypted|fingerprint/i;
 
 export function sanitizeForAudit(value: unknown, depth = 0): unknown {
   if (value === null || value === undefined) return value;
@@ -51,5 +52,22 @@ export async function writeAudit(req: Request, input: AuditInput): Promise<void>
     });
   } catch (err) {
     req.log?.error({ err, action: input.action }, 'AUDIT WRITE FAILED');
+  }
+}
+
+/**
+ * Writes an audit record into a specific company's own database from a context that is not inside that company's
+ * request scope (platform console, public signup). If that database is unreachable the failure is logged, not thrown:
+ * the business action has already happened and must not look as if it failed.
+ */
+export async function writeTenantAudit(
+  req: Request,
+  tenantId: string | Types.ObjectId,
+  input: AuditInput,
+): Promise<void> {
+  try {
+    await tenantDatabaseManager.runInTenant(tenantId, () => writeAudit(req, { ...input, tenantId }));
+  } catch (err) {
+    req.log?.error({ err, action: input.action, tenantId: String(tenantId) }, 'AUDIT WRITE FAILED (company database unavailable)');
   }
 }

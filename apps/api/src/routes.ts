@@ -37,12 +37,14 @@ import { registerNotificationRoutes } from './modules/notifications/notification
 import { registerSignupRoutes } from './modules/signup/signup.routes';
 import { registerPlatformRoutes } from './modules/platform/platform.routes';
 import { registerTenantRoutes } from './modules/tenants/tenants.routes';
+import { registerTenantDatabaseRoutes } from './modules/tenants/database.routes';
 
 export function createV1Router(env: Env, deps: { clock: Clock }): Router {
   const v1 = Router();
   registerHealthRoutes(v1, env);
   registerAuthRoutes(v1, env);
   registerTenantRoutes(v1, env);
+  registerTenantDatabaseRoutes(v1, env);
   registerDepartmentRoutes(v1, env);
   registerDesignationRoutes(v1, env);
   registerRecruitmentRoutes(v1, env);

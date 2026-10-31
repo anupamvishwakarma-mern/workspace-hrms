@@ -1,0 +1,34 @@
+// Side-effect imports: make sure every company-data model is registered (so provisioning, verification and
+// migrations see the complete list) regardless of which process (API, worker, script) is running.
+import '../models/approvalRequest.model';
+import '../models/approvalWorkflow.model';
+import '../models/attendanceCorrection.model';
+import '../models/attendanceDay.model';
+import '../models/attendanceEvent.model';
+import '../models/attendanceException.model';
+import '../models/auditLog.model';
+import '../models/counter.model';
+import '../models/customRole.model';
+import '../models/department.model';
+import '../models/designation.model';
+import '../models/employee.model';
+import '../models/employeeDocument.model';
+import '../models/employeeSensitive.model';
+import '../models/employmentChange.model';
+import '../models/handbookSection.model';
+import '../models/holiday.model';
+import '../models/leaveLedger.model';
+import '../models/leaveRequest.model';
+import '../models/leaveType.model';
+import '../models/letter.model';
+import '../models/payroll.model';
+import '../models/profileItem.model';
+import '../models/punchPhoto.model';
+import '../models/recruitment.model';
+import '../models/resignation.model';
+import '../models/salaryStructure.model';
+import '../models/shift.model';
+import '../models/shiftAssignment.model';
+import '../models/statutoryRule.model';
+import '../models/wfhRequest.model';
+import '../models/workLocation.model';

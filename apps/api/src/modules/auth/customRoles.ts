@@ -1,6 +1,6 @@
 import type { Types } from 'mongoose';
 import { CustomRole } from '../../database/models/customRole.model';
-import { runInTenantDb } from '../../database/tenantContext';
+import { runInTenantScope, type TenantDbScope } from '../../database/tenantContext';
 import { enabledModules, moduleForPermission } from '../tenants/modules';
 import { ROLE_PERMISSIONS, type Permission } from './permissions';
 
@@ -13,6 +13,7 @@ export const ALL_PERMISSIONS: ReadonlySet<Permission> = new Set(Object.values(RO
  */
 export const LOCKED_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   'tenant:update',
+  'tenant:database',
   'role:manage',
   'employee:roles',
   'employee:sensitive:update',
@@ -45,13 +46,13 @@ export function resolveExtraPermissions(
 
 /** Loads the person's custom roles from the company database. Cheap no-op for people who have none. */
 export async function loadExtraPermissions(
-  dbName: string | undefined,
+  scope: TenantDbScope,
   tenantId: Types.ObjectId,
   customRoleIds: readonly Types.ObjectId[] | undefined,
   modules: readonly string[] | null | undefined,
 ): Promise<Set<Permission>> {
   if (!customRoleIds || customRoleIds.length === 0) return new Set();
-  const roles = await runInTenantDb(dbName, () =>
+  const roles = await runInTenantScope(scope, () =>
     CustomRole.find({ tenantId, _id: { $in: customRoleIds } })
       .select('permissions')
       .lean(),

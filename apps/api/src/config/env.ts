@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseKeyRing } from '../database/hosting/secrets';
 import { parseEncryptionKey } from '../utils/fieldCrypto';
 
 const optionalString = z
@@ -53,6 +54,44 @@ const schema = z
     PHOTO_RETENTION_DAYS: z.coerce.number().int().min(7).max(3650).default(90),
     /** 32-byte key (64 hex characters) that encrypts bank and statutory identifiers. Unset = those endpoints answer 503. */
     FIELD_ENCRYPTION_KEY: optionalString,
+    /**
+     * Customer-owned MongoDB: versioned keys that encrypt customers' connection strings, "v1:<64 hex>[,v2:<64 hex>]".
+     * Unset = customer-owned hosting is unavailable (managed hosting is unaffected).
+     */
+    TENANT_DB_ENCRYPTION_KEYS: optionalString,
+    /** Key version used for new secrets (default: the last one listed). Old versions stay readable for rotation. */
+    TENANT_DB_ACTIVE_KEY_VERSION: optionalString,
+    /** Platform switch for the customer-owned option (still needs the encryption keys). */
+    CUSTOMER_DB_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+    /** Shown to managed companies in Settings -> Database & Infrastructure (describes your real backup arrangement). */
+    MANAGED_BACKUP_POLICY_TEXT: optionalString,
+    /** Logical name of our managed cluster, stored on managed companies. */
+    MANAGED_CLUSTER_ID: z.string().min(1).max(60).default('primary'),
+    /** Allow customer hosts on private/loopback addresses and any port. Development/tests or private-network deployments only. */
+    CUSTOMER_DB_ALLOW_PRIVATE_HOSTS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    /** Refuse customer connections that do not use TLS. */
+    CUSTOMER_DB_REQUIRE_TLS: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+    CUSTOMER_DB_PORT_MIN: z.coerce.number().int().min(1).max(65535).default(27000),
+    CUSTOMER_DB_PORT_MAX: z.coerce.number().int().min(1).max(65535).default(27999),
+    CUSTOMER_DB_CONNECT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
+    CUSTOMER_DB_MAX_POOL_SIZE: z.coerce.number().int().min(1).max(50).default(5),
+    CUSTOMER_DB_IDLE_CLOSE_MINUTES: z.coerce.number().int().min(1).max(1440).default(30),
+    CUSTOMER_DB_MAX_CONNECTIONS: z.coerce.number().int().min(1).max(5000).default(200),
+    CUSTOMER_DB_MIN_MONGO_VERSION: z.string().regex(/^\d+(\.\d+)*$/).default('6.0'),
+    CUSTOMER_DB_HEALTH_MIN_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(86400).default(240),
+    /** Connection tests per user per hour (each one opens a connection to an external host). */
+    RATE_LIMIT_DB_TEST_MAX: z.coerce.number().int().min(1).default(10),
+    /** Companies migrated per worker run (controlled rollout of schema changes). */
+    TENANT_DB_MIGRATION_BATCH: z.coerce.number().int().min(1).max(500).default(5),
     OBJECT_STORAGE_ENDPOINT: optionalString,
     OBJECT_STORAGE_BUCKET: optionalString,
     OBJECT_STORAGE_REGION: z.string().default('us-east-1'),
@@ -123,6 +162,25 @@ const schema = z
         });
       }
     }
+    if (env.TENANT_DB_ENCRYPTION_KEYS) {
+      try {
+        parseKeyRing(env.TENANT_DB_ENCRYPTION_KEYS, env.TENANT_DB_ACTIVE_KEY_VERSION);
+      } catch (e) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['TENANT_DB_ENCRYPTION_KEYS'],
+          message: (e as Error).message,
+        });
+      }
+    }
+    if (env.CUSTOMER_DB_PORT_MIN > env.CUSTOMER_DB_PORT_MAX)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['CUSTOMER_DB_PORT_MIN'], message: 'CUSTOMER_DB_PORT_MIN must not exceed CUSTOMER_DB_PORT_MAX' });
+    if (env.NODE_ENV === 'production' && env.CUSTOMER_DB_ALLOW_PRIVATE_HOSTS)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['CUSTOMER_DB_ALLOW_PRIVATE_HOSTS'],
+        message: 'CUSTOMER_DB_ALLOW_PRIVATE_HOSTS=true disables SSRF protection; refuse it in production (use a private-network deployment with an explicit allow-list instead)',
+      });
     if (env.EMAIL_PROVIDER === 'smtp' && (!env.SMTP_HOST || !env.EMAIL_FROM)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -170,6 +228,7 @@ export function integrationStatus(env: Env): Record<string, IntegrationState> {
     email: s(env.EMAIL_PROVIDER !== 'none'),
     push: s(env.PUSH_PROVIDER !== 'none'),
     maps: s(env.MAP_PROVIDER !== 'none' && !!env.MAP_API_KEY),
+    customerOwnedDatabase: s(env.CUSTOMER_DB_ENABLED && !!env.TENANT_DB_ENCRYPTION_KEYS),
     subscriptionBilling: s(env.SUBSCRIPTION_PROVIDER !== 'none' && !!env.SUBSCRIPTION_API_KEY),
   };
 }

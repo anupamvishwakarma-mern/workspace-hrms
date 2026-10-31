@@ -3,6 +3,7 @@ import type { TenantRole } from '../../database/models/membership.model';
 export type Permission =
   | 'tenant:read'
   | 'tenant:update'
+  | 'tenant:database' // see and change where company data is hosted (owner only; handles credentials)
   | 'role:manage' // create, edit and delete company-defined roles (owner only)
   | 'employee:read:all'
   | 'employee:read:team'
@@ -123,6 +124,7 @@ export const ROLE_PERMISSIONS: Record<TenantRole, Permission[]> = {
   COMPANY_OWNER: [
     ...HR_PERMS,
     'tenant:update',
+    'tenant:database',
     'role:manage',
     'employee:read:team',
     'employee:read:basic',

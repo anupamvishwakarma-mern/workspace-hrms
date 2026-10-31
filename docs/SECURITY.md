@@ -56,3 +56,8 @@ Scope: the API, web admin and mobile client in this repository as of Phase 7. Th
 ## Reporting
 
 Report vulnerabilities privately to the maintainers of your deployment. Do not open public issues with exploit details.
+
+
+## Customer database credentials
+
+Encrypted with AES-256-GCM (versioned key ring), never returned or logged, visible to no HR role; only the company owner can replace them (re-authentication, audited). SSRF protections apply to every customer host. See DATABASE_HOSTING.md.

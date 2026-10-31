@@ -1,7 +1,8 @@
 import { DateTime } from 'luxon';
 import type { Logger } from 'pino';
 import { Tenant } from '../../database/models/tenant.model';
-import { runInTenantDb } from '../../database/tenantContext';
+import { tenantDatabaseManager } from '../../database/hosting/manager';
+import { TENANT_DB_FIELDS } from '../../database/hosting/source';
 import { isValidTimezone, localDate } from '../attendance/dates';
 import { enabledModules } from '../tenants/modules';
 import { runCarryForward, runMonthlyAccrual } from './ledger.service';
@@ -63,7 +64,7 @@ export async function runLeaveAutomation(
 ): Promise<LeaveAutomationResult> {
   const out: LeaveAutomationResult = { tenants: 0, skipped: 0, failed: 0, accrualEntries: 0, carryEntries: 0 };
   const tenants = await Tenant.find({ status: 'ACTIVE', 'settings.leave.autoAccrual': true })
-    .select('_id timezone dbName modules settings.leave')
+    .select(`_id timezone ${TENANT_DB_FIELDS} modules settings.leave`)
     .lean();
   for (const t of tenants) {
     try {
@@ -77,7 +78,7 @@ export async function runLeaveAutomation(
       }
       const since = (t.settings as { leave?: { autoSince?: string } } | undefined)?.leave?.autoSince;
       const today = localDate(now, t.timezone);
-      await runInTenantDb(t.dbName ?? undefined, async () => {
+      await tenantDatabaseManager.runInTenantDoc(t, async () => {
         for (const month of monthsToRun(since, today))
           out.accrualEntries += (await runMonthlyAccrual(t._id, month)).entriesCreated;
         const year = carryYearToRun(since, today);

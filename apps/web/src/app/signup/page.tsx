@@ -1,10 +1,18 @@
 'use client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { AuthShell } from '@/components/auth-shell';
+import {
+  ConnectionTester,
+  CustomerDbFields,
+  HostingChoice,
+  type CustomerDbValue,
+  type DbTestResult,
+  type HostingMode,
+} from '@/components/hosting-choice';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/display';
 import { Field, Input, Select } from '@/components/ui/form';
@@ -26,7 +34,7 @@ const schema = z.object({
 type Form = z.infer<typeof schema>;
 
 interface SignupResult {
-  company: { name: string; slug: string; maxEmployees: number };
+  company: { name: string; slug: string; maxEmployees: number; hostingMode?: HostingMode };
   message: string;
   activationLink?: string;
 }
@@ -51,6 +59,18 @@ export default function SignupPage() {
     }
   }, []);
   const [error, setError] = useState<string>();
+  const [mode, setMode] = useState<HostingMode>('MANAGED');
+  const [customerAvailable, setCustomerAvailable] = useState(false);
+  const [cdb, setCdb] = useState<CustomerDbValue>({ connectionString: '', databaseName: '' });
+  const [tested, setTested] = useState<DbTestResult>();
+  useEffect(() => {
+    api
+      .getPublic<{ hostingModes: { mode: string; available: boolean }[] }>('/signup/options')
+      .then((r) =>
+        setCustomerAvailable(!!r.data.hostingModes.find((m) => m.mode === 'CUSTOMER_OWNED')?.available),
+      )
+      .catch(() => setCustomerAvailable(false));
+  }, []);
   const [done, setDone] = useState<SignupResult>();
   const {
     register,
@@ -66,7 +86,7 @@ export default function SignupPage() {
       <AuthShell title="Your workspace is ready">
         <Alert tone="success">{done.message}</Alert>
         <p className="text-sm text-muted">
-          {done.company.name} has its own private database and room for {done.company.maxEmployees}{' '}
+          {done.company.name} has its own private database ({done.company.hostingMode === 'CUSTOMER_OWNED' ? 'in your MongoDB' : 'managed by us'}) and room for {done.company.maxEmployees}{' '}
           members. Set your password to finish, then sign in.
         </p>
         {done.activationLink ? (
@@ -94,12 +114,24 @@ export default function SignupPage() {
         noValidate
         onSubmit={handleSubmit(async (v) => {
           setError(undefined);
+          if (mode === 'CUSTOMER_OWNED' && cdb.connectionString.trim().length < 10) {
+            setError('Enter your MongoDB connection string, or choose the managed database.');
+            return;
+          }
           try {
             const res = await api.postPublic<SignupResult>('/signup', {
               name: v.name,
               maxEmployees: v.maxEmployees,
               timezone: v.timezone,
               owner: { email: v.email, firstName: v.firstName, lastName: v.lastName },
+              database:
+                mode === 'CUSTOMER_OWNED'
+                  ? {
+                      hostingMode: 'CUSTOMER_OWNED',
+                      connectionString: cdb.connectionString.trim(),
+                      ...(cdb.databaseName.trim() ? { databaseName: cdb.databaseName.trim() } : {}),
+                    }
+                  : { hostingMode: 'MANAGED' },
             });
             setDone(res.data);
           } catch (e) {
@@ -149,6 +181,32 @@ export default function SignupPage() {
             <Input id={id} type="email" autoComplete="email" invalid={inv} {...register('email')} />
           )}
         </Field>
+        <HostingChoice
+          mode={mode}
+          onMode={(m) => {
+            setMode(m);
+            setTested(undefined);
+          }}
+          customerAvailable={customerAvailable}
+        />
+        {mode === 'CUSTOMER_OWNED' ? (
+          <div className="space-y-4 rounded-xl border border-border p-3">
+            <CustomerDbFields
+              value={cdb}
+              onChange={(v) => {
+                setCdb(v);
+                setTested(undefined);
+              }}
+            />
+            <ConnectionTester value={cdb} endpoint="/signup/database/test" pub onResult={setTested} />
+            {!tested ? (
+              <p className="text-xs text-muted">
+                Testing first is recommended. Your company is only activated after the database passes every
+                check.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <Button type="submit" className="w-full" loading={isSubmitting}>
           Create company
         </Button>

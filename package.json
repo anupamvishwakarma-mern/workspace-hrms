@@ -10,6 +10,7 @@
   "scripts": {
     "dev:api": "pnpm --filter @workforce/api dev",
     "dev:web": "pnpm --filter @workforce/web dev",
+    "dev:marketing": "pnpm --filter @workforce/marketing dev",
     "dev:mobile": "pnpm --filter @workforce/mobile start",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",

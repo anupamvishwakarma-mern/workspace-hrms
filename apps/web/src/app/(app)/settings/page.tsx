@@ -4,6 +4,7 @@ import { PageTop } from '@/components/page-top';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { DatabaseSettings } from '@/components/database-settings';
 import { Button } from '@/components/ui/button';
 import { Alert, Card, Skeleton } from '@/components/ui/display';
 import { Field, Input } from '@/components/ui/form';
@@ -279,6 +280,9 @@ export default function SettingsPage() {
           Save settings
         </Button>
       </form>
+      <div className="mt-6 max-w-2xl">
+        <DatabaseSettings />
+      </div>
     </>
   );
 }

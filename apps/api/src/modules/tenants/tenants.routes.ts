@@ -75,6 +75,24 @@ const patchBody = z
   .partial()
   .strict();
 
+type DatabaseLean = {
+  hostingMode?: string;
+  status?: string;
+  health?: string;
+  schemaVersion?: number;
+  databaseName?: string;
+};
+/** Whitelisted, secret-free view of a company's database configuration. */
+const serializeDatabase = (d: DatabaseLean | undefined) =>
+  d && {
+    hostingMode: d.hostingMode,
+    status: d.status,
+    health: d.health,
+    schemaVersion: d.schemaVersion,
+    // The physical name of a managed database is internal; a customer's own is theirs.
+    databaseName: d.hostingMode === 'CUSTOMER_OWNED' ? d.databaseName : undefined,
+  };
+
 export const serializeTenant = (t: Record<string, unknown> & { _id: unknown }) => ({
   id: String(t._id),
   name: t.name,
@@ -85,6 +103,7 @@ export const serializeTenant = (t: Record<string, unknown> & { _id: unknown }) =
   planId: t.planId,
   maxEmployees: t.maxEmployees,
   dbName: t.dbName,
+  database: serializeDatabase(t.database as DatabaseLean | undefined),
   modules: enabledModules(t.modules as string[] | undefined),
   settings: t.settings,
   numbering: resolveNumbering((t.settings as { numbering?: never } | undefined)?.numbering),

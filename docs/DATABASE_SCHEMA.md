@@ -50,3 +50,8 @@ Not yet implemented: Notification inbox, Subscription.
 
 - MongoDB **must run as a replica set** (transactions are used for tenant onboarding and will be used for leave balances). A single-node replica set is fine; startup logs a warning otherwise.
 - Audit writes are best-effort: a failed audit insert is logged at error level but does not roll back the action.
+
+
+## Hosting additions
+
+`Tenant.database` (hosting mode, status, encrypted connection config, health, schema version), control-plane `TenantDbEvent`, and a per-tenant-database `_hrms_meta` binding document. See DATABASE_HOSTING.md.

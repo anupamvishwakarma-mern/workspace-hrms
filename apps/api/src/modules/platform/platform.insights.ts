@@ -6,7 +6,8 @@ import { ENDED_STATUSES, Employee } from '../../database/models/employee.model';
 import { Membership } from '../../database/models/membership.model';
 import { Tenant } from '../../database/models/tenant.model';
 import { User } from '../../database/models/user.model';
-import { runInTenantDb } from '../../database/tenantContext';
+import { tenantDatabaseManager } from '../../database/hosting/manager';
+import type { TenantDbSource } from '../../database/hosting/source';
 import { authenticate, requirePlatformAdmin } from '../../middleware/auth';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { AppError } from '../../utils/errors';
@@ -15,12 +16,14 @@ import { idParams, validate } from '../../utils/validate';
 import { MODULE_KEYS, enabledModules } from '../tenants/modules';
 import { serializeTenant } from '../tenants/tenants.routes';
 
-type TenantLean = Record<string, unknown> & { _id: any; dbName?: string | null };
+type TenantLean = Record<string, unknown> & { _id: any; dbName?: string | null; database?: unknown };
 
 /** Current (not ended) people in one company's own database. */
 export const headcountOf = (t: TenantLean): Promise<number> =>
-  runInTenantDb(t.dbName ?? undefined, () =>
-    Employee.countDocuments({ tenantId: t._id, employmentStatus: { $nin: ENDED_STATUSES } }),
+  tenantDatabaseManager.runInTenantDoc(
+    t as unknown as TenantDbSource,
+    () => Employee.countDocuments({ tenantId: t._id, employmentStatus: { $nin: ENDED_STATUSES } }),
+    { allowInactive: true },
   );
 
 /** Counts for many companies, a few at a time, so a large platform does not open hundreds of queries at once. */
@@ -132,10 +135,12 @@ export function registerPlatformInsights(v1: Router, env: Env): void {
       if (!t) throw AppError.notFound('Company not found');
       const [owners, headcount, activity] = await Promise.all([
         Membership.find({ tenantId: t._id, roles: 'COMPANY_OWNER' }).lean(),
-        headcountOf(t),
-        runInTenantDb(t.dbName ?? undefined, () =>
-          AuditLog.find({ tenantId: t._id, action: /^platform\./ }).sort({ createdAt: -1 }).limit(20).lean(),
-        ),
+        headcountOf(t).catch(() => 0), // an unreachable customer-owned database must not break the console
+        tenantDatabaseManager
+          .runInTenantDoc(t as unknown as TenantDbSource, () =>
+            AuditLog.find({ tenantId: t._id, action: /^platform\./ }).sort({ createdAt: -1 }).limit(20).lean(),
+          )
+          .catch(() => []),
       ]);
       const users = await User.find({ _id: { $in: [...owners.map((o) => o.userId), ...activity.map((a) => a.actorUserId).filter(Boolean)] } })
         .select('email status lastLoginAt')

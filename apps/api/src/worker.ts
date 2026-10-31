@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { EnvValidationError, parseEnv } from './config/env';
 import { createLogger } from './config/logger';
-import { connectDatabase, disconnectDatabase } from './database/connection';
+import { backfillTenantDatabaseConfig, connectDatabase, disconnectDatabase } from './database/connection';
+import { tenantDatabaseManager } from './database/hosting/manager';
 import { createQueue, createWorker, registerSchedules } from './jobs/queue';
 
 /** Background worker process: `pnpm --filter @workforce/api worker`. Needs REDIS_URL. */
@@ -22,6 +23,8 @@ async function main(): Promise<void> {
   }
   const log = createLogger(env);
   await connectDatabase(env.MONGODB_URI, log);
+  tenantDatabaseManager.configure(env, log);
+  await backfillTenantDatabaseConfig(env.MANAGED_CLUSTER_ID);
   const queue = createQueue(env.REDIS_URL);
   await registerSchedules(queue);
   const worker = createWorker(env.REDIS_URL, { env, log });

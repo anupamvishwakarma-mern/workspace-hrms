@@ -70,3 +70,8 @@ Settings (`PATCH /tenants/current`) are owner-only with a strict body; HR and ma
 
 `tests/tenancy.test.ts`: cross-tenant read/list/update/invite/deactivate/role-change/department edits, cross-tenant
 reference injection, `X-Tenant-Id` abuse, super-admin boundaries, suspended tenants. `tests/scheduling.test.ts` and `tests/corrections.test.ts` add cross-tenant checks for shifts, locations, corrections and exceptions. `tests/reports.test.ts` and `tests/web-contract.test.ts` cover reports, exports, settings and approval lists across tenants and roles.
+
+
+## Dual hosting
+
+A tenant's database is resolved only by `TenantDatabaseManager` from the verified membership; missing or non-READY config fails closed (never a fallback). Customer-owned tenants use their own pooled connection with connection-specific models. See DATABASE_HOSTING.md.
