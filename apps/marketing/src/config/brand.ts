@@ -13,14 +13,18 @@ export const brand = {
   logoMark: env('NEXT_PUBLIC_BRAND_MARK', 'Y'),
   /** Optional path in /public (e.g. /logo.svg). When empty the text mark is used. */
   logoImage: env('NEXT_PUBLIC_BRAND_LOGO', ''),
+  /**
+   * Used only where CSS variables cannot reach (social image, browser theme colour). They mirror the
+   * shared product theme in src/app/globals.css: change the theme there first, then keep these in sync.
+   */
   colors: {
-    primary: '#2563EB',
+    primary: '#0F766E',
     secondary: '#0F172A',
-    accent: '#14B8A6',
-    lightBackground: '#FFFFFF',
-    lightSurface: '#F8FAFC',
-    darkBackground: '#0B1220',
-    darkSurface: '#111827',
+    accent: '#2DD4BF',
+    lightBackground: '#F5F7FA',
+    lightSurface: '#FFFFFF',
+    darkBackground: '#0A1014',
+    darkSurface: '#111A20',
   },
   contact: {
     // Placeholders. Leave empty to hide. Never put real-looking fake values here.

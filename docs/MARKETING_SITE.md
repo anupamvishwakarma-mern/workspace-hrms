@@ -19,7 +19,7 @@ pnpm --filter @workforce/marketing test
 
 | What                                                                                  | Where                                                                                                          |
 | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Brand name, tagline, colours, contact, social links                                   | `src/config/brand.ts` (+ `NEXT_PUBLIC_BRAND_*`). CSS tokens mirror the colours in `src/app/globals.css`.       |
+| Brand name, tagline, colours, contact, social links                                   | `src/config/brand.ts` (+ `NEXT_PUBLIC_BRAND_*`). The theme itself (light and dark) lives in `src/app/globals.css` and uses the shared product theme tokens verbatim; `brand.colors` only mirrors it for the social image and browser theme colour.       |
 | Base URL, app/login/trial/demo URLs                                                   | `src/config/site.ts`                                                                                           |
 | Plans, prices, annual discount, GST, add-ons, hosting commercial rules, billing terms | `src/config/pricing.ts` (`illustrative: true` shows an "illustrative" banner everywhere; set false when final) |
 | Product modules (what exists vs `comingSoon`)                                         | `src/config/features.ts`                                                                                       |

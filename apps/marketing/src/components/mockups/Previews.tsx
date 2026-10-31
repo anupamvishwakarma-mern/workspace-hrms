@@ -106,10 +106,10 @@ export function LeavePreview() {
                 {t} · {d} · {l}
               </p>
             </div>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-success-bg text-success">
               <Check className="h-4 w-4" />
             </span>
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-danger-bg text-danger">
               <X className="h-4 w-4" />
             </span>
           </div>
@@ -130,7 +130,7 @@ export function ShiftPreview() {
   const style: Record<string, string> = {
     G: 'bg-primary-soft text-link',
     M: 'bg-accent-soft text-accent-text',
-    E: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+    E: 'bg-warn-bg text-warn',
     O: 'bg-surface-2 text-muted',
   };
   return (

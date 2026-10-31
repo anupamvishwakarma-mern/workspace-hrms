@@ -12,11 +12,11 @@ export function FinalCTA({
   return (
     <section className="py-16 sm:py-24">
       <Container>
-        <div className="rounded-3xl bg-[#0f172a] px-6 py-14 text-center text-white sm:px-12 dark:border dark:border-border dark:bg-surface">
+        <div className="rounded-3xl border border-border bg-inverse px-6 py-14 text-center text-inverse-foreground sm:px-12">
           <h2 className="mx-auto max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">
             {title}
           </h2>
-          <p className="mx-auto mt-4 max-w-xl text-lg text-slate-300">{text}</p>
+          <p className="mx-auto mt-4 max-w-xl text-lg text-inverse-muted">{text}</p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <CtaLink href={site.trialUrl} size="lg">
               Start Free Trial
@@ -25,7 +25,7 @@ export function FinalCTA({
               href={site.demoUrl}
               size="lg"
               variant="outline"
-              className="border-slate-600 bg-transparent text-white hover:bg-white/10"
+              className="border-inverse-muted/50 bg-transparent text-inverse-foreground hover:bg-white/10"
             >
               Book a Demo
             </CtaLink>

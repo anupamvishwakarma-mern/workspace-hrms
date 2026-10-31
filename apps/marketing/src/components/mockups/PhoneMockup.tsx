@@ -11,11 +11,11 @@ export function PhoneMockup({ screen, className }: { screen: PhoneScreen; classN
       <div
         role="img"
         aria-label={`Illustrative mobile ${screen} screen`}
-        className="rounded-[2.2rem] border-[7px] border-slate-900 bg-background p-3 shadow-hero dark:border-slate-700"
+        className="rounded-[2.2rem] border-[7px] border-inverse bg-background p-3 shadow-hero"
       >
         <div
           aria-hidden
-          className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-slate-900 dark:bg-slate-700"
+          className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-inverse"
         />
         <div aria-hidden className="min-h-[24rem] space-y-3 text-[11px]">
           {screen === 'today' ? <Today /> : screen === 'history' ? <History /> : <Leave />}

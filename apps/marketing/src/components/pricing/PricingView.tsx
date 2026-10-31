@@ -32,7 +32,7 @@ export function PricingView() {
       {pricingConfig.illustrative ? (
         <p
           role="note"
-          className="mx-auto max-w-2xl rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+          className="mx-auto max-w-2xl rounded-xl border border-warn/30 bg-warn-bg px-4 py-3 text-center text-sm text-warn"
         >
           All prices on this page are <strong>illustrative</strong> and not confirmed commercial
           prices.

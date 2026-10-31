@@ -22,9 +22,9 @@ export function WindowFrame({
         className="overflow-hidden rounded-2xl border border-border bg-background shadow-hero"
       >
         <div className="flex items-center gap-2 border-b border-border bg-surface px-4 py-2.5">
-          <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-rose-400/80" />
-          <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
-          <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
+          <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-danger/70" />
+          <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-warn/70" />
+          <span aria-hidden className="h-2.5 w-2.5 rounded-full bg-success/70" />
           <span className="ml-3 truncate rounded-md bg-background px-3 py-0.5 text-xs text-muted">
             {brand.name.toLowerCase()}.app / {title.toLowerCase().replace(/\s+/g, '-')}
           </span>
@@ -72,9 +72,9 @@ export function Pill({
 }) {
   const c = {
     neutral: 'bg-surface-2 text-muted',
-    ok: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-    danger: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
-    warn: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+    ok: 'bg-success-bg text-success',
+    danger: 'bg-danger-bg text-danger',
+    warn: 'bg-warn-bg text-warn',
     primary: 'bg-primary-soft text-link',
   }[tone];
   return (
@@ -82,12 +82,13 @@ export function Pill({
   );
 }
 
+const AVATAR_BG = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-5', 'bg-chart-6'];
+
 export function Avatar({ name }: { name: string }) {
-  const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+  const pick = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_BG.length;
   return (
     <span
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-      style={{ background: `hsl(${hue} 55% 42%)` }}
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-slate-900 ${AVATAR_BG[pick]}`}
     >
       {name
         .split(' ')

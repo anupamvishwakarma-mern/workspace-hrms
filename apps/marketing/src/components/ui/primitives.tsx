@@ -28,8 +28,8 @@ export function Badge({
     neutral: 'bg-surface-2 text-muted',
     primary: 'bg-primary-soft text-link',
     accent: 'bg-accent-soft text-accent-text',
-    warn: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300',
-    ok: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300',
+    warn: 'bg-warn-bg text-warn',
+    ok: 'bg-success-bg text-success',
   };
   return (
     <span
@@ -60,7 +60,7 @@ export function Section({
     tone === 'surface'
       ? 'bg-surface'
       : tone === 'dark'
-        ? 'bg-[#0f172a] text-white dark:bg-surface'
+        ? 'bg-inverse text-inverse-foreground'
         : '';
   return (
     <section id={id} className={cn('py-16 sm:py-24', bg, className)} {...p}>

@@ -25,7 +25,7 @@ export function InfoPage({
         {draft ? (
           <p
             role="note"
-            className="mb-8 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+            className="mb-8 rounded-xl border border-warn/30 bg-warn-bg p-4 text-sm text-warn"
           >
             <strong>Draft for legal review.</strong> This is a structural placeholder, not a legally
             reviewed document. Replace it with text approved by your legal adviser before launch.
